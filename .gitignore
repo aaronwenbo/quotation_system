@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+dist-win/
+build/
+desktop/client/dist/
+desktop/server/
+
+# Database
+*.db
+*.sqlite
+database.db
+
+# Environment & Private
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

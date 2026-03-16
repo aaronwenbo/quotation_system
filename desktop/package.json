@@ -1,0 +1,53 @@
+{
+  "name": "quotation-desktop",
+  "version": "1.0.0",
+  "main": "main.js",
+  "type": "module",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder",
+    "pack": "electron-packager . 液压管接头报价系统 --platform=win32 --arch=x64 --out=build --overwrite"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "electron-packager": "^17.1.2"
+  },
+  "dependencies": {
+    "nvm": "^0.0.4"
+  },
+  "build": {
+    "appId": "com.quotation.system",
+    "productName": "液压管接头报价系统",
+    "directories": {
+      "output": "dist-win"
+    },
+    "files": [
+      "main.js",
+      "package.json",
+      "server/**/*",
+      "client/dist/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "requestedExecutionLevel": "asInvoker"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "液压管接头报价系统",
+      "installerIcon": null,
+      "uninstallerIcon": null,
+      "runAfterFinish": true
+    },
+    "asar": true,
+    "asarUnpack": [
+      "server/node_modules/sqlite3"
+    ]
+  }
+}
