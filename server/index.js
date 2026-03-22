@@ -7,14 +7,16 @@ import templatesRouter from './routes/templates.js';
 import quotationsRouter from './routes/quotations.js';
 import importRouter from './routes/import.js';
 import exportRouter from './routes/export.js';
+import logsRouter from './routes/logs.js';
+import aliasesRouter from './routes/aliases.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // 中间件
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // 路由
 app.use('/api/products', productsRouter);
@@ -23,6 +25,8 @@ app.use('/api/templates', templatesRouter);
 app.use('/api/quotations', quotationsRouter);
 app.use('/api/import', importRouter);
 app.use('/api/export', exportRouter);
+app.use('/api/logs', logsRouter);
+app.use('/api/aliases', aliasesRouter);
 
 // 健康检查
 app.get('/api/health', (req, res) => {

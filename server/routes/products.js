@@ -1,5 +1,6 @@
 import express from 'express';
 import { getPool } from '../database.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -36,6 +37,10 @@ router.get('/', async (req, res) => {
 
         const [rows] = await pool.query(sql, params);
 
+        if (rows.length > 0 && page === 1 && !search) {
+            logger.info('查询产品列表', { count: rows.length, firstItem: rows[0].product_code });
+        }
+
         res.json({
             data: rows,
             total,
@@ -69,15 +74,14 @@ router.post('/', async (req, res) => {
         const pool = getPool();
         const { product_code, name_cn, name_en, category, specifications, unit, cost_price, base_price } = req.body;
 
-        const [result] = await pool.execute(
-            `INSERT INTO products (product_code, name_cn, name_en, category, specifications, unit, cost_price, base_price)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-            [product_code, name_cn, name_en || '', category || '', JSON.stringify(specifications || {}), unit || '个', cost_price || 0, base_price || 0]
-        );
-
-        res.status(201).json({ id: result.insertId, message: '产品创建成功' });
+        const sql = `INSERT INTO products (product_code, name_cn, name_en, category, specifications, unit, cost_price, base_price)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+        const params = [product_code, name_cn || null, name_en || '', category || '', JSON.stringify(specifications || {}), unit || '个', cost_price || 0, base_price || 0];
+        const [result] = await pool.execute(sql, params);
+        logger.info('新增产品成功', { product_code, id: result.insertId });
+        res.status(201).json({ id: result.insertId, message: '产品添加成功' });
     } catch (error) {
-        console.error('创建产品失败:', error);
+        logger.error('创建产品失败:', error);
         if (error.code === 'ER_DUP_ENTRY') {
             return res.status(400).json({ error: '产品编码已存在' });
         }
@@ -90,16 +94,16 @@ router.put('/:id', async (req, res) => {
     try {
         const pool = getPool();
         const { product_code, name_cn, name_en, category, specifications, unit, cost_price, base_price } = req.body;
+        const id = req.params.id;
 
-        await pool.execute(
-            `UPDATE products SET product_code = ?, name_cn = ?, name_en = ?, category = ?, 
-       specifications = ?, unit = ?, cost_price = ?, base_price = ? WHERE id = ?`,
-            [product_code, name_cn, name_en || '', category || '', JSON.stringify(specifications || {}), unit || '个', cost_price || 0, base_price || 0, req.params.id]
-        );
-
+        const sql = `UPDATE products SET product_code = ?, name_cn = ?, name_en = ?, category = ?, 
+       specifications = ?, unit = ?, cost_price = ?, base_price = ? WHERE id = ?`;
+        const params = [product_code, name_cn || null, name_en || '', category || '', JSON.stringify(specifications || {}), unit || '个', cost_price || 0, base_price || 0, id];
+        await pool.execute(sql, params);
+        logger.info('更新产品成功', { id });
         res.json({ message: '产品更新成功' });
     } catch (error) {
-        console.error('更新产品失败:', error);
+        logger.error('更新产品失败:', error);
         res.status(500).json({ error: '更新产品失败' });
     }
 });
@@ -109,6 +113,7 @@ router.delete('/:id', async (req, res) => {
     try {
         const pool = getPool();
         await pool.execute('DELETE FROM products WHERE id = ?', [req.params.id]);
+        logger.info('删除产品成功', { id: req.params.id });
         res.json({ message: '产品删除成功' });
     } catch (error) {
         console.error('删除产品失败:', error);

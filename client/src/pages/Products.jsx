@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Table, Button, Space, Input, Modal, Form, message, Popconfirm, Upload, InputNumber, Select } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons';
+import * as XLSX from 'xlsx';
 import { productApi, importApi } from '../services/api';
 
 const { Search } = Input;
@@ -78,12 +79,51 @@ function Products() {
 
         try {
             const res = await importApi.products(formData);
-            message.success(res.data.message);
-            setImportModalVisible(false);
-            loadProducts();
+            if (res.data.errorCount > 0) {
+                Modal.warning({
+                    title: `部分导入失败 (成功 ${res.data.successCount} 条, 失败 ${res.data.errorCount} 条)`,
+                    width: 600,
+                    content: (
+                        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                            <p style={{ color: '#666', marginBottom: 10 }}>可能是由于【产品编码已存在且无法更新】、【必填项(编码或名称)为空】或【数据格式错误】导致。以下是部分失败详情（最多显示 10 条）：</p>
+                            <ul style={{ paddingLeft: 20 }}>
+                                {res.data.errors?.map((err, i) => (
+                                    <li key={i} style={{ marginBottom: 10 }}>
+                                        <div>
+                                            <span style={{ color: 'red', fontWeight: 'bold' }}>错误原因:</span> {err.error}
+                                        </div>
+                                        <div style={{ color: '#888', fontSize: '12px', wordBreak: 'break-all', marginTop: 4 }}>
+                                            数据：{JSON.stringify(err.row)}
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    ),
+                    onOk: () => {
+                        setImportModalVisible(false);
+                        loadProducts();
+                    }
+                });
+            } else {
+                message.success(res.data.message);
+                setImportModalVisible(false);
+                loadProducts();
+            }
         } catch (error) {
             message.error(error.response?.data?.error || t('common.error'));
         }
+    };
+
+    const downloadTemplate = () => {
+        const templateData = [
+            ['编码', '名称', '英文名称', '分类', '单位', '成本价', '基础价格'],
+            ['P001', '示例接头', 'Sample Joint', '液压接头', '个', 10.50, 20.00]
+        ];
+        const ws = XLSX.utils.aoa_to_sheet(templateData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, '产品导入模板');
+        XLSX.writeFile(wb, '产品导入模板.xlsx');
     };
 
     const columns = [
@@ -161,7 +201,7 @@ function Products() {
                     <Form.Item name="product_code" label={t('product.code')} rules={[{ required: true }]}>
                         <Input />
                     </Form.Item>
-                    <Form.Item name="name_cn" label={t('product.nameCn')} rules={[{ required: true }]}>
+                    <Form.Item name="name_cn" label={t('product.nameCn')}>
                         <Input />
                     </Form.Item>
                     <Form.Item name="name_en" label={t('product.nameEn')}>
@@ -194,6 +234,12 @@ function Products() {
                 onCancel={() => setImportModalVisible(false)}
                 footer={null}
             >
+                <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: '#666' }}>请先下载标准模板，按格式要求填写产品信息后上传：</span>
+                    <Button type="primary" icon={<DownloadOutlined />} onClick={downloadTemplate}>
+                        下载导入模板
+                    </Button>
+                </div>
                 <Upload.Dragger
                     accept=".xlsx,.xls"
                     customRequest={handleImport}
@@ -204,7 +250,7 @@ function Products() {
                     </p>
                     <p className="ant-upload-text">{t('import.uploadFile')}</p>
                     <p className="ant-upload-hint">
-                        支持 .xlsx, .xls 格式，需包含：编码、名称、分类、单位、成本价、基础价格
+                        支持 .xlsx, .xls 格式，建议包含：编码、名称、英文名称、分类、单位、成本价、基础价格
                     </p>
                 </Upload.Dragger>
             </Modal>

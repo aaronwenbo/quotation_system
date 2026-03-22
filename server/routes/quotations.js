@@ -118,28 +118,52 @@ router.post('/', async (req, res) => {
 
         const quotationId = result.insertId;
 
+        // 获取所有关联的产品信息，以产品编码为主键带入真实的产品名称和ID
+        let productsMap = {};
+        if (items && items.length > 0) {
+            const itemCodes = items.map(item => item.product_code).filter(c => !!c);
+            if (itemCodes.length > 0) {
+                const placeholders = itemCodes.map(() => '?').join(',');
+                const [prods] = await connection.query(`SELECT id, product_code, name_cn, name_en, cost_price FROM products WHERE product_code IN (${placeholders})`, itemCodes);
+                prods.forEach(p => {
+                    productsMap[p.product_code] = p;
+                });
+            }
+        }
+
         // 创建报价单明细并记录价格历史
         if (items && Array.isArray(items)) {
             for (const item of items) {
                 const qty = toNum(item.quantity, 1);
                 const price = toNum(item.unit_price, 0);
                 const disc = toNum(item.discount, 100);
-                const cost = toNum(item.cost_price, 0);
                 const amount = toNum(item.amount, 0);
+
+                // 强制以产品编码为主键带入
+                let realProductId = toNum(item.product_id);
+                let realProductName = item.product_name;
+                let realCostPrice = toNum(item.cost_price, 0);
+
+                if (item.product_code && productsMap[item.product_code]) {
+                    const matchedProd = productsMap[item.product_code];
+                    realProductId = matchedProd.id;
+                    realProductName = matchedProd.name_cn || matchedProd.name_en || item.product_name;
+                    realCostPrice = matchedProd.cost_price || realCostPrice;
+                }
 
                 await connection.query(
                     `INSERT INTO quotation_items (quotation_id, product_id, product_code, product_name, quantity, unit_price, cost_price, discount, amount, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [quotationId, toNum(item.product_id), item.product_code, item.product_name, qty, price, cost, disc, amount, item.notes || '']
+                    [quotationId, realProductId, item.product_code, realProductName, qty, price, realCostPrice, disc, amount, item.notes || '']
                 );
 
                 // 记录价格历史
-                if (item.product_id && req.body.status === 'confirmed') {
-                    console.log('记录历史报价:', item.product_id, item.unit_price);
+                if (realProductId && req.body.status === 'confirmed') {
+                    console.log('记录历史报价:', realProductId, price);
                     await connection.query(
                         `INSERT INTO price_history (product_id, quotation_id, customer_id, unit_price, quantity)
                          VALUES (?, ?, ?, ?, ?)`,
-                        [toNum(item.product_id), toNum(quotationId), toNum(customer_id), price, qty]
+                        [realProductId, toNum(quotationId), toNum(customer_id), price, qty]
                     );
                 }
             }
@@ -184,26 +208,48 @@ router.put('/:id', async (req, res) => {
 
         // 重新创建明细
         if (items && items.length > 0) {
+            // 获取所有关联的产品信息，以产品编码为主键带入真实的产品名称和ID
+            let productsMap = {};
+            const itemCodes = items.map(item => item.product_code).filter(c => !!c);
+            if (itemCodes.length > 0) {
+                const placeholders = itemCodes.map(() => '?').join(',');
+                const [prods] = await connection.query(`SELECT id, product_code, name_cn, name_en, cost_price FROM products WHERE product_code IN (${placeholders})`, itemCodes);
+                prods.forEach(p => {
+                    productsMap[p.product_code] = p;
+                });
+            }
+
             for (const item of items) {
                 const qty = toNum(item.quantity, 1);
                 const price = toNum(item.unit_price, 0);
                 const disc = toNum(item.discount, 100);
-                const cost = toNum(item.cost_price, 0);
                 const amount = toNum(item.amount, 0);
+
+                // 强制以产品编码为主键带入
+                let realProductId = toNum(item.product_id);
+                let realProductName = item.product_name;
+                let realCostPrice = toNum(item.cost_price, 0);
+
+                if (item.product_code && productsMap[item.product_code]) {
+                    const matchedProd = productsMap[item.product_code];
+                    realProductId = matchedProd.id;
+                    realProductName = matchedProd.name_cn || matchedProd.name_en || item.product_name;
+                    realCostPrice = matchedProd.cost_price || realCostPrice;
+                }
 
                 await connection.query(
                     `INSERT INTO quotation_items (quotation_id, product_id, product_code, product_name, quantity, unit_price, cost_price, discount, amount, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [toNum(quotationId), toNum(item.product_id), item.product_code, item.product_name, qty, price, cost, disc, amount, item.notes || '']
+                    [toNum(quotationId), realProductId, item.product_code, realProductName, qty, price, realCostPrice, disc, amount, item.notes || '']
                 );
 
                 // 记录价格历史
-                if (item.product_id && status === 'confirmed') {
-                    console.log('更新确认报价，记录历史:', item.product_id, item.unit_price);
+                if (realProductId && status === 'confirmed') {
+                    console.log('更新确认报价，记录历史:', realProductId, price);
                     await connection.query(
                         `INSERT INTO price_history (product_id, quotation_id, customer_id, unit_price, quantity)
                          VALUES (?, ?, ?, ?, ?)`,
-                        [toNum(item.product_id), toNum(quotationId), toNum(customer_id), price, qty]
+                        [realProductId, toNum(quotationId), toNum(customer_id), price, qty]
                     );
                 }
             }

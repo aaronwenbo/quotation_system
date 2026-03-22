@@ -12,6 +12,7 @@ import Templates from './pages/Templates';
 import Quotations from './pages/Quotations';
 import QuotationForm from './pages/QuotationForm';
 import ImportInquiry from './pages/ImportInquiry';
+import Aliases from './pages/Aliases';
 import { useAppStore } from './stores';
 import './App.css';
 
@@ -48,6 +49,7 @@ function App() {
               <Route path="/quotations/new" element={<QuotationForm />} />
               <Route path="/quotations/:id" element={<QuotationForm />} />
               <Route path="/import" element={<ImportInquiry />} />
+              <Route path="/aliases" element={<Aliases />} />
             </Routes>
           </Layout>
         </Router>

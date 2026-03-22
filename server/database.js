@@ -7,7 +7,7 @@ const dbConfig = {
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 3306,
   user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || 'admin',
+  password: process.env.DB_PASSWORD || 'aaron',
   database: process.env.DB_NAME || 'quotation_system',
   waitForConnections: true,
   connectionLimit: 10,
@@ -54,7 +54,7 @@ async function initSqlite() {
   // 我们将动态导入 sqlite3 以避免在非桌面环境下出错
   const sqlite3 = (await import('sqlite3')).default;
   const { open } = await import('sqlite');
-  
+
   const dbPath = path.join(process.cwd(), 'database.db');
   sqliteDb = await open({
     filename: dbPath,
@@ -73,7 +73,7 @@ async function initSqlite() {
       .replace(/CHARACTER SET \w+/gi, '')
       .replace(/COLLATE \w+/gi, '')
       .replace(/ENGINE=InnoDB/gi, '');
-    
+
     // 我们的 SQL 主要是 CREATE TABLE，如果是查询则使用 all/get
     if (sql.trim().toUpperCase().startsWith('SELECT')) {
       const rows = await sqliteDb.all(sql, params);
@@ -94,7 +94,7 @@ async function createTablesMySQL(pool) {
     CREATE TABLE IF NOT EXISTS products (
       id INT AUTO_INCREMENT PRIMARY KEY,
       product_code VARCHAR(50) UNIQUE NOT NULL,
-      name_cn VARCHAR(200) NOT NULL,
+      name_cn VARCHAR(200) NULL,
       name_en VARCHAR(200),
       category VARCHAR(100),
       specifications JSON,
@@ -185,6 +185,21 @@ async function createTablesMySQL(pool) {
       INDEX idx_product_quoted (product_id, quoted_at DESC)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  await pool.execute(`
+    CREATE TABLE IF NOT EXISTS product_aliases (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      alias_code VARCHAR(200) NOT NULL,
+      alias_name VARCHAR(200),
+      product_id INT NOT NULL,
+      match_level TINYINT DEFAULT 1,
+      hit_count INT DEFAULT 0,
+      is_new TINYINT DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_alias_code (alias_code),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 async function createTablesSqlite(db) {
@@ -193,7 +208,7 @@ async function createTablesSqlite(db) {
     CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_code TEXT UNIQUE NOT NULL,
-      name_cn TEXT NOT NULL,
+      name_cn TEXT NULL,
       name_en TEXT,
       category TEXT,
       specifications TEXT,
@@ -277,6 +292,20 @@ async function createTablesSqlite(db) {
       FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
       FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
       FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL
+    )
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS product_aliases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      alias_code TEXT NOT NULL,
+      alias_name TEXT,
+      product_id INTEGER NOT NULL,
+      match_level INTEGER DEFAULT 1,
+      hit_count INTEGER DEFAULT 0,
+      is_new INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
     )
   `);
 }

@@ -69,4 +69,14 @@ export const importApi = {
     })
 };
 
+// 别名API
+export const aliasApi = {
+    getAll: (params) => api.get('/aliases', { params }),
+    create: (data) => api.post('/aliases', data),
+    confirm: (data) => api.post('/aliases/confirm', data),
+    update: (id, data) => api.put(`/aliases/${id}`, data),
+    delete: (id) => api.delete(`/aliases/${id}`),
+    markRead: (ids) => api.post('/aliases/mark-read', { ids })
+};
+
 export default api;

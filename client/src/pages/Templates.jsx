@@ -16,6 +16,7 @@ function Templates() {
     const [modalVisible, setModalVisible] = useState(false);
     const [editingTemplate, setEditingTemplate] = useState(null);
     const [prices, setPrices] = useState({});
+    const [searchTerm, setSearchTerm] = useState('');
     const [form] = Form.useForm();
     const [importModalVisible, setImportModalVisible] = useState(false);
     const [importingId, setImportingId] = useState(null);
@@ -39,7 +40,8 @@ function Templates() {
 
     const loadProducts = async () => {
         try {
-            const res = await productApi.getAll({ pageSize: 1000 });
+            // 本次更新：移除 1000 条限制，增加到 100000 以支持全量
+            const res = await productApi.getAll({ pageSize: 100000 });
             setProducts(res.data.data || []);
         } catch (error) {
             console.error('加载产品失败:', error);
@@ -50,6 +52,7 @@ function Templates() {
         setEditingTemplate(null);
         form.resetFields();
         setPrices({});
+        setSearchTerm('');
         setModalVisible(true);
     };
 
@@ -62,7 +65,20 @@ function Templates() {
         });
         const templatePrices = typeof record.prices === 'string' ? JSON.parse(record.prices) : (record.prices || {});
         setPrices(templatePrices);
+        setSearchTerm('');
         setModalVisible(true);
+    };
+
+    const handleCopyFromTemplate = async (templateId) => {
+        if (!templateId) return;
+        try {
+            const res = await templateApi.getOne(templateId);
+            const sourcePrices = typeof res.data.prices === 'string' ? JSON.parse(res.data.prices) : (res.data.prices || {});
+            setPrices(prev => ({ ...prev, ...sourcePrices }));
+            message.success('已复制模板价格');
+        } catch (error) {
+            message.error('获取源模板价格失败');
+        }
     };
 
     const handleDelete = async (id) => {
@@ -164,8 +180,14 @@ function Templates() {
         }
     ];
 
-    // 按分类分组产品
-    const productsByCategory = products.reduce((acc, product) => {
+    // 过滤并按分类分组产品
+    const filteredProducts = products.filter(p => 
+        !searchTerm || 
+        p.product_code.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (p.name_cn && p.name_cn.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+
+    const productsByCategory = filteredProducts.reduce((acc, product) => {
         const category = product.category || '未分类';
         if (!acc[category]) acc[category] = [];
         acc[category].push(product);
@@ -197,25 +219,58 @@ function Templates() {
                 open={modalVisible}
                 onCancel={() => setModalVisible(false)}
                 footer={null}
-                width={800}
+                width={900}
             >
                 <Form form={form} layout="vertical" onFinish={handleSubmit}>
-                    <Form.Item name="name" label={t('template.name')} rules={[{ required: true }]}>
-                        <Input />
-                    </Form.Item>
-                    <Form.Item name="description" label={t('template.description')}>
-                        <TextArea rows={2} />
-                    </Form.Item>
-                    <Form.Item name="is_default" valuePropName="checked">
-                        <label>
-                            <input type="checkbox" {...form.getFieldProps?.('is_default')} style={{ marginRight: 8 }} />
-                            {t('template.isDefault')}
-                        </label>
-                    </Form.Item>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                        <div>
+                            <Form.Item name="name" label={t('template.name')} rules={[{ required: true }]}>
+                                <Input />
+                            </Form.Item>
+                            <Form.Item name="description" label={t('template.description')}>
+                                <TextArea rows={2} />
+                            </Form.Item>
+                            <Form.Item name="is_default" valuePropName="checked">
+                                <label>
+                                    <input type="checkbox" {...form.getFieldProps?.('is_default')} style={{ marginRight: 8 }} />
+                                    {t('template.isDefault')}
+                                </label>
+                            </Form.Item>
+                        </div>
+                        <div style={{ borderLeft: '1px solid #f0f0f0', paddingLeft: '24px' }}>
+                            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                                <h4 style={{ margin: 0 }}>导入现有价格</h4>
+                                <Space.Compact style={{ width: '200px' }}>
+                                    <select 
+                                        className="ant-input ant-input-sm"
+                                        onChange={(e) => handleCopyFromTemplate(e.target.value)}
+                                        value=""
+                                    >
+                                        <option value="" disabled>选择源模板...</option>
+                                        {templates.filter(t => t.id !== editingTemplate?.id).map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                </Space.Compact>
+                            </div>
+                            <div style={{ marginBottom: 16 }}>
+                                <Input 
+                                    placeholder="搜索产品编码或名称..." 
+                                    prefix={<PlusOutlined style={{ transform: 'rotate(45deg)' }} />} 
+                                    allowClear
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    value={searchTerm}
+                                />
+                            </div>
+                        </div>
+                    </div>
 
                     <div style={{ marginBottom: 16 }}>
-                        <h4>{t('template.prices')}</h4>
-                        <Collapse>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                            <h4>{t('template.prices')}</h4>
+                            <span style={{ fontSize: '12px', color: '#8c8c8c' }}>仅显示匹配的产品 ({filteredProducts.length})</span>
+                        </div>
+                        <Collapse defaultActiveKey={Object.keys(productsByCategory)}>
                             {Object.entries(productsByCategory).map(([category, categoryProducts]) => (
                                 <Collapse.Panel header={`${category} (${categoryProducts.length})`} key={category}>
                                     <Table
@@ -224,7 +279,7 @@ function Templates() {
                                         dataSource={categoryProducts}
                                         rowKey="product_code"
                                         columns={[
-                                            { title: '编码', dataIndex: 'product_code', width: 100 },
+                                            { title: '编码', dataIndex: 'product_code', width: 120 },
                                             { title: '名称', dataIndex: 'name_cn' },
                                             { title: '基础价', dataIndex: 'base_price', width: 100, render: (v) => `¥${v || 0}` },
                                             {
@@ -238,7 +293,7 @@ function Templates() {
                                                         value={prices[record.product_code]}
                                                         placeholder={record.base_price?.toString()}
                                                         onChange={(v) => handlePriceChange(record.product_code, v)}
-                                                        style={{ width: '100%' }}
+                                                        style={{ width: '100%', borderColor: prices[record.product_code] ? '#1890ff' : '#d9d9d9' }}
                                                     />
                                                 )
                                             }
@@ -249,7 +304,7 @@ function Templates() {
                         </Collapse>
                     </div>
 
-                    <Form.Item>
+                    <Form.Item style={{ marginTop: 24 }}>
                         <Space>
                             <Button type="primary" htmlType="submit">{t('common.save')}</Button>
                             <Button onClick={() => setModalVisible(false)}>{t('common.cancel')}</Button>

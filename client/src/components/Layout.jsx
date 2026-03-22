@@ -11,7 +11,8 @@ import {
     UploadOutlined,
     GlobalOutlined,
     MenuFoldOutlined,
-    MenuUnfoldOutlined
+    MenuUnfoldOutlined,
+    TagsOutlined
 } from '@ant-design/icons';
 import { useAppStore } from '../stores';
 
@@ -27,6 +28,7 @@ function Layout({ children }) {
     const menuItems = [
         { key: '/', icon: <HomeOutlined />, label: t('nav.home') },
         { key: '/products', icon: <AppstoreOutlined />, label: t('nav.products') },
+        { key: '/aliases', icon: <TagsOutlined />, label: t('nav.aliases', '产品别名管理') },
         { key: '/customers', icon: <TeamOutlined />, label: t('nav.customers') },
         { key: '/templates', icon: <CopyOutlined />, label: t('nav.templates') },
         { key: '/quotations', icon: <FileTextOutlined />, label: t('nav.quotations') },

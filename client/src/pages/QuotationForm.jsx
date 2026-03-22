@@ -144,10 +144,10 @@ function QuotationForm() {
         const product = products.find(p => p.id === productId);
         if (!product) return;
 
-        // 【去重逻辑】检查产品名称是否已存在
-        const duplicateIndex = items.findIndex((item, i) => i !== index && item.product_name === product.name_cn);
+        // 【去重逻辑】检查产品编码是否已存在
+        const duplicateIndex = items.findIndex((item, i) => i !== index && item.product_code === product.product_code);
         if (duplicateIndex !== -1) {
-            message.warning(`${t('quotation.productName')} "${product.name_cn}" ${t('common.duplicateError') || '已存在'}`);
+            message.warning(`产品编码 "${product.product_code}" ${t('common.duplicateError') || '已存在'}`);
             return;
         }
 
@@ -249,24 +249,24 @@ function QuotationForm() {
 
                 const newItems = [...items];
                 for (const row of jsonData) {
-                    const name = row['产品名称'] || row['名称'] || row['Name'] || '';
+                    const code = (row['产品编码'] || row['编码'] || row['Code'] || '').toString().trim();
                     const quantity = parseInt(row['数量'] || row['Quantity'] || 1) || 1;
 
-                    if (!name) continue;
+                    if (!code) continue;
 
                     // 【去重逻辑】检查是否已在当前列表中
-                    if (newItems.some(item => item.product_name === name)) {
-                        console.warn(`跳过重复产品: ${name}`);
+                    if (newItems.some(item => item.product_code === code)) {
+                        console.warn(`跳过重复产品: ${code}`);
                         continue;
                     }
 
                     // 尝试匹配产品
-                    const product = products.find(p => p.name_cn === name || p.name_en === name);
+                    const product = products.find(p => p.product_code === code);
 
                     let itemPrice = 0;
                     let productId = null;
-                    let productCode = '';
-                    let productName = name;
+                    let productCode = code;
+                    let productName = row['产品名称'] || row['名称'] || row['Name'] || '';
 
                     if (product) {
                         productId = product.id;
@@ -310,8 +310,8 @@ function QuotationForm() {
 
     const handleDownloadTemplate = () => {
         const data = [
-            { '产品名称': '接头1', '数量': 10 },
-            { '产品名称': '接头2', '数量': 5 }
+            { '产品编码': 'CODE001', '数量': 10 },
+            { '产品编码': 'CODE002', '数量': 5 }
         ];
         const ws = XLSX.utils.json_to_sheet(data);
         const wb = XLSX.utils.book_new();
@@ -363,7 +363,7 @@ function QuotationForm() {
 
     const itemColumns = [
         {
-            title: t('quotation.productName'),
+            title: '产品编码',
             dataIndex: 'product_id',
             width: 250,
             render: (_, record, index) => (
@@ -371,14 +371,15 @@ function QuotationForm() {
                     showSearch
                     style={{ width: '100%' }}
                     placeholder={t('common.selectPlaceholder')}
-                    value={record.product_id}
+                    value={record.product_id || record.product_code}
                     onChange={(v) => handleProductSelect(index, v)}
                     filterOption={(input, option) =>
-                        (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+                        (option?.searchStr ?? '').toLowerCase().includes(input.toLowerCase())
                     }
                     options={products.map(p => ({
                         value: p.id,
-                        label: `${p.product_code} - ${p.name_cn}`
+                        label: `${p.product_code} ${p.name_cn ? `(${p.name_cn})` : ''}`,
+                        searchStr: `${p.product_code} ${p.name_cn}`
                     }))}
                 />
             )
