@@ -325,6 +325,145 @@ def read_user_mapping(mapping_file: str) -> Dict[str, str]:
     return mapping
 
 
+def build_final_products(
+    auto_merged_df: pd.DataFrame,
+    user_mapping: Dict[str, str],
+    df1_original: pd.DataFrame,  # 保留参数供未来扩展使用
+    df2_original: pd.DataFrame   # 保留参数供未来扩展使用
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    应用用户映射，构建最终统一产品库和完整映射表
+
+    Args:
+        auto_merged_df: 自动合并结果
+        user_mapping: 用户提供的原始编码 -> 最终编码映射
+        df1_original: 文件1原始数据
+        df2_original: 文件2原始数据
+
+    Returns:
+        (final_products_df, full_mapping_df):
+            final_products_df: 最终统一产品库
+            full_mapping_df: 完整映射表
+    """
+    logger.info("开始构建最终产品库...")
+
+    # 存储最终产品和完整映射
+    final_products: Dict[str, dict] = {}
+    full_mapping: List[dict] = []
+
+    # 第一步：处理自动合并的项，确定最终编码
+    for idx, row in auto_merged_df.iterrows():
+        # 自动合并的项使用cleaned_code作为最终编码
+        # 如果存在用户映射则使用用户指定的编码
+        if row['source'] == 'both':
+            # 两边都有，用cleaned_code作为最终编码
+            final_code = row['cleaned_code']
+            # 检查是否有用户映射覆盖
+            if row['original_code_1'] in user_mapping:
+                final_code = user_mapping[row['original_code_1']]
+            elif row['original_code_2'] in user_mapping:
+                final_code = user_mapping[row['original_code_2']]
+
+            product = {
+                'unified_code': final_code,
+                'product_name': row['product_name'],
+                'spec': row['spec'],
+                'unit': row['unit'],
+                'cost_price': row['cost_price'],
+                'sale_price': row['sale_price_1'] if pd.notna(row['sale_price_1']) else row['sale_price_2'],
+                'category': row['category'],
+                'source': row['source'],
+            }
+            # 检查是否覆盖已存在的最终编码
+            if final_code in final_products:
+                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file1={row['original_code_1']}, file2={row['original_code_2']}")
+            final_products[final_code] = product
+
+            # 添加映射记录
+            full_mapping.append({
+                'source_file': 'file1',
+                'original_code': row['original_code_1'],
+                'unified_code': final_code,
+                'needs_manual_mapping': row['original_code_1'] in user_mapping,
+            })
+            full_mapping.append({
+                'source_file': 'file2',
+                'original_code': row['original_code_2'],
+                'unified_code': final_code,
+                'needs_manual_mapping': row['original_code_2'] in user_mapping,
+            })
+
+        elif row['source'] == 'file1_only':
+            orig_code = row['original_code_1']
+            final_code = row['cleaned_code']
+            # 检查用户映射
+            if orig_code in user_mapping:
+                final_code = user_mapping[orig_code]
+
+            product = {
+                'unified_code': final_code,
+                'product_name': row['product_name'],
+                'spec': row['spec'],
+                'unit': row['unit'],
+                'cost_price': row['cost_price'],
+                'sale_price': row['sale_price_1'],
+                'category': row['category'],
+                'source': row['source'],
+            }
+            # 检查是否覆盖已存在的最终编码
+            if final_code in final_products:
+                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file1={orig_code}")
+            final_products[final_code] = product
+
+            full_mapping.append({
+                'source_file': 'file1',
+                'original_code': orig_code,
+                'unified_code': final_code,
+                'needs_manual_mapping': orig_code != final_code,
+            })
+
+        elif row['source'] == 'file2_only':
+            orig_code = row['original_code_2']
+            final_code = row['cleaned_code']
+            # 检查用户映射
+            if orig_code in user_mapping:
+                final_code = user_mapping[orig_code]
+
+            product = {
+                'unified_code': final_code,
+                'product_name': row['product_name'],
+                'spec': row['spec'],
+                'unit': row['unit'],
+                'cost_price': row['cost_price'],
+                'sale_price': row['sale_price_2'],
+                'category': row['category'],
+                'source': row['source'],
+            }
+            # 检查是否覆盖已存在的最终编码
+            if final_code in final_products:
+                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file2={orig_code}")
+            final_products[final_code] = product
+
+            full_mapping.append({
+                'source_file': 'file2',
+                'original_code': orig_code,
+                'unified_code': final_code,
+                'needs_manual_mapping': orig_code != final_code,
+            })
+
+    # 处理用户映射中可能新增的合并（两个不同编码合并到一个新编码）
+    # 这里已经通过映射字典处理了，上面的逻辑会正确应用
+
+    # 转换为DataFrame
+    final_df = pd.DataFrame(list(final_products.values()))
+    mapping_df = pd.DataFrame(full_mapping)
+
+    logger.info(f"最终产品库构建完成，共 {len(final_df)} 个唯一产品")
+    logger.info(f"完整映射表共 {len(mapping_df)} 条记录")
+
+    return final_df, mapping_df
+
+
 if __name__ == '__main__':
     # 这里后续放主逻辑
     pass
