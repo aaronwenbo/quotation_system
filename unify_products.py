@@ -480,14 +480,26 @@ def update_stock_codes(
     """
     logger.info(f"读取原始库存文件: {stock_file_path}")
 
-    # 读取库存文件
-    df_stock = pd.read_excel(stock_file_path, sheet_name=0, header=0)
-    logger.info(f"原始库存共 {len(df_stock)} 行")
+    try:
+        # 读取库存文件
+        df_stock = pd.read_excel(stock_file_path, sheet_name=0, header=0)
+        logger.info(f"原始库存共 {len(df_stock)} 行")
+    except Exception as e:
+        logger.error(f"读取库存文件失败: {str(e)}", exc_info=True)
+        raise
 
-    # 构建映射字典 original_code -> unified_code
-    mapping_dict: Dict[str, str] = {}
-    for idx, row in full_mapping.iterrows():
-        mapping_dict[str(row['original_code'])] = str(row['unified_code'])
+    # 检查产品编码*列是否存在
+    product_code_col = '产品编码*'
+    if product_code_col not in df_stock.columns:
+        logger.error(f"库存文件中缺少必要的 '{product_code_col}' 列。"
+                     f"文件中的列名包括: {list(df_stock.columns)}")
+        raise ValueError(f"库存文件缺少必要的 '{product_code_col}' 列")
+
+    # 构建映射字典 original_code -> unified_code (使用 pandas zip 优化)
+    mapping_dict: Dict[str, str] = dict(zip(
+        full_mapping['original_code'].astype(str),
+        full_mapping['unified_code'].astype(str)
+    ))
 
     logger.info(f"构建了 {len(mapping_dict)} 条编码映射关系")
 
