@@ -30,7 +30,7 @@ def clean_product_code(code) -> str:
     """
     清理产品编码，统一格式：
     - 去除所有空格
-    - 去除首尾特殊字符
+    - 去除首尾空白字符
 
     Args:
         code: 原始产品编码（任意类型）
