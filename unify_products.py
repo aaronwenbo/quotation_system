@@ -242,6 +242,78 @@ def match_and_merge(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame,
     return merged_df, pending_df
 
 
+def export_pending_mapping(pending_df: pd.DataFrame, output_path: str) -> None:
+    """
+    导出需要人工匹配的模板
+
+    Args:
+        pending_df: 需要人工匹配的数据
+        output_path: 输出路径
+    """
+    if len(pending_df) == 0:
+        logger.info("没有需要人工匹配的项，跳过导出")
+        return
+
+    logger.info(f"导出 {len(pending_df)} 条待人工匹配记录到: {output_path}")
+
+    # 创建模板：用户需要填写 final_unified_code
+    template_data = []
+    for idx, row in pending_df.iterrows():
+        template_data.append({
+            'original_code_1': row['original_code_1'],
+            'original_code_2': row['original_code_2'],
+            'spec_1': row['spec_1'] if 'spec_1' in row else None,
+            'spec_2': row['spec_2'] if 'spec_2' in row else None,
+            'final_unified_code': "",  # 用户填写
+            'note': "",  # 用户备注
+        })
+
+    template_df = pd.DataFrame(template_data)
+    template_df.to_excel(output_path, index=False)
+    logger.info("映射模板导出完成，请填写后重新运行程序")
+
+
+def read_user_mapping(mapping_file: str) -> Dict[str, str]:
+    """
+    读取用户填写完成的映射表
+
+    Args:
+        mapping_file: 映射表文件路径
+
+    Returns:
+        原始编码 -> 最终统一编码 的字典
+    """
+    if not os.path.exists(mapping_file):
+        logger.info(f"映射文件不存在: {mapping_file}，返回空映射")
+        return {}
+
+    logger.info(f"读取用户映射文件: {mapping_file}")
+    df = pd.read_excel(mapping_file, header=0)
+
+    mapping: Dict[str, str] = {}
+    filled_count = 0
+
+    for idx, row in df.iterrows():
+        final_code = clean_product_code(row.get('final_unified_code', ""))
+        if final_code == "":
+            continue
+
+        # 处理原始编码1
+        if pd.notna(row.get('original_code_1', None)):
+            orig = str(row['original_code_1'])
+            mapping[orig] = final_code
+            filled_count += 1
+
+        # 处理原始编码2
+        if pd.notna(row.get('original_code_2', None)):
+            orig = str(row['original_code_2'])
+            mapping[orig] = final_code
+            filled_count += 1
+
+    logger.info(f"读取到 {filled_count} 条有效映射")
+    return mapping
+
+
 if __name__ == '__main__':
     # 这里后续放主逻辑
     pass
