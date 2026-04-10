@@ -544,6 +544,114 @@ def update_stock_codes(
     return df_stock
 
 
+def save_outputs(
+    final_products: pd.DataFrame,
+    full_mapping: pd.DataFrame,
+    updated_stock: pd.DataFrame,
+    pending_template: pd.DataFrame = None
+) -> None:
+    """
+    保存所有输出文件
+
+    Args:
+        final_products: 最终统一产品库
+        full_mapping: 完整映射表
+        updated_stock: 更新后的库存
+        pending_template: 待人工匹配模板，如果有的话
+    """
+    logger.info("开始保存输出文件...")
+
+    # 保存统一产品库
+    products_xlsx = os.path.join(OUTPUT_DIR, 'product_unified.xlsx')
+    products_csv = os.path.join(OUTPUT_DIR, 'product_unified.csv')
+    final_products.to_excel(products_xlsx, index=False)
+    final_products.to_csv(products_csv, index=False, encoding='utf-8-sig')
+    logger.info(f"统一产品库已保存: {products_xlsx}, {products_csv}")
+
+    # 保存完整映射表
+    mapping_xlsx = os.path.join(OUTPUT_DIR, 'code_mapping.xlsx')
+    full_mapping.to_excel(mapping_xlsx, index=False)
+    logger.info(f"完整映射表已保存: {mapping_xlsx}")
+
+    # 保存更新后的库存
+    stock_xlsx = os.path.join(OUTPUT_DIR, 'initial_stock_updated.xlsx')
+    updated_stock.to_excel(stock_xlsx, index=False)
+    logger.info(f"更新后库存已保存: {stock_xlsx}")
+
+    # 如果有待匹配模板，保存它
+    if pending_template is not None and len(pending_template) > 0:
+        template_xlsx = os.path.join(OUTPUT_DIR, 'mapping_template.xlsx')
+        pending_template.to_excel(template_xlsx, index=False)
+        logger.info(f"待人工匹配模板已保存: {template_xlsx}")
+
+
+def main():
+    """
+    主流程：
+    1. 读取两份报价文件
+    2. 自动清理编码
+    3. 自动匹配合并
+    4. 如果有待匹配，导出模板供用户填写
+    5. 读取用户映射（如果存在）
+    6. 构建最终产品库
+    7. 更新库存文件
+    8. 保存所有输出
+    """
+    logger.info("=" * 60)
+    logger.info("产品编码统一合并工具 开始运行")
+    logger.info("=" * 60)
+
+    # 配置文件路径
+    file1_path = 'data/product_import_template.xlsx'
+    file2_path = 'data/product_import_template_neixian.xlsx'
+    stock_file_path = 'data/initial-bin-stock-template.xlsx'
+    user_mapping_path = os.path.join(OUTPUT_DIR, 'mapping_template.xlsx')
+
+    try:
+        # 步骤1: 读取两份文件
+        df1, map1 = read_quote_file(file1_path)
+        df2, map2 = read_quote_file(file2_path)
+
+        # 步骤2: 自动匹配合并
+        auto_merged, pending = match_and_merge(df1, df2)
+
+        # 步骤3: 如果有待匹配，导出模板
+        if len(pending) > 0:
+            export_pending_mapping(pending, os.path.join(OUTPUT_DIR, 'mapping_template.xlsx'))
+            logger.info("请填写 output/mapping_template.xlsx 后重新运行程序完成合并")
+            logger.info("当前仅保存已自动完成的部分")
+        else:
+            logger.info("所有产品都已自动匹配，无需人工干预")
+
+        # 步骤4: 读取用户映射（如果文件存在且有内容）
+        user_mapping = read_user_mapping(user_mapping_path)
+
+        # 步骤5: 构建最终产品库和完整映射
+        final_products, full_mapping = build_final_products(auto_merged, user_mapping, df1, df2)
+
+        # 步骤6: 更新库存
+        updated_stock = update_stock_codes(stock_file_path, full_mapping)
+
+        # 步骤7: 保存所有输出
+        save_outputs(final_products, full_mapping, updated_stock, pending)
+
+        # 输出最终统计
+        logger.info("=" * 60)
+        logger.info("处理完成！最终统计:")
+        logger.info(f"  - 文件1原始有效产品: {len(df1)}")
+        logger.info(f"  - 文件2原始有效产品: {len(df2)}")
+        logger.info(f"  - 自动匹配一致: {len(auto_merged[auto_merged['source'] == 'both'])}")
+        logger.info(f"  - 仅文件1独有: {len(auto_merged[auto_merged['source'] == 'file1_only'])}")
+        logger.info(f"  - 仅文件2独有: {len(auto_merged[auto_merged['source'] == 'file2_only'])}")
+        logger.info(f"  - 需要人工映射: {len(pending)}")
+        logger.info(f"  - 应用用户映射后最终产品数: {len(final_products)}")
+        logger.info(f"  - 输出文件保存在: {OUTPUT_DIR}/")
+        logger.info("=" * 60)
+
+    except Exception as e:
+        logger.error(f"处理过程发生错误: {str(e)}", exc_info=True)
+        raise
+
+
 if __name__ == '__main__':
-    # 这里后续放主逻辑
-    pass
+    main()
