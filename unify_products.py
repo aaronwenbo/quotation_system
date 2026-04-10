@@ -119,6 +119,129 @@ def read_quote_file(file_path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
         raise
 
 
+def match_and_merge(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    基于清理后的编码自动匹配合并两份数据
+
+    Args:
+        df1: 第一份报价文件处理后的数据
+        df2: 第二份报价文件处理后的数据
+
+    Returns:
+        (auto_merged_df, pending_df):
+            auto_merged_df: 自动匹配完成的数据（包括完全一致和单方独有）
+            pending_df: 需要人工匹配的数据
+    """
+    logger.info("开始自动匹配合并...")
+
+    #  deduplicate df1 by cleaned_code
+    if df1['cleaned_code'].duplicated().any():
+        duplicate_codes_df1 = df1[df1['cleaned_code'].duplicated(keep=False)]['cleaned_code'].value_counts()
+        duplicate_count_df1 = len(duplicate_codes_df1)
+        duplicate_codes_list_df1 = list(duplicate_codes_df1.index)
+        logger.warning(f"文件1中发现 {duplicate_count_df1} 个重复的清理后编码，重复编码: {duplicate_codes_list_df1}")
+        logger.warning(f"文件1去重前记录数: {len(df1)}, 去重后记录数: {df1['cleaned_code'].nunique()}")
+        df1 = df1.drop_duplicates(subset=['cleaned_code'], keep='first')
+
+    #  deduplicate df2 by cleaned_code
+    if df2['cleaned_code'].duplicated().any():
+        duplicate_codes_df2 = df2[df2['cleaned_code'].duplicated(keep=False)]['cleaned_code'].value_counts()
+        duplicate_count_df2 = len(duplicate_codes_df2)
+        duplicate_codes_list_df2 = list(duplicate_codes_df2.index)
+        logger.warning(f"文件2中发现 {duplicate_count_df2} 个重复的清理后编码，重复编码: {duplicate_codes_list_df2}")
+        logger.warning(f"文件2去重前记录数: {len(df2)}, 去重后记录数: {df2['cleaned_code'].nunique()}")
+        df2 = df2.drop_duplicates(subset=['cleaned_code'], keep='first')
+
+    # 获取所有清理后的编码集合
+    codes1 = set(df1['cleaned_code'])
+    codes2 = set(df2['cleaned_code'])
+
+    # 计算各种情况
+    matched_codes = codes1.intersection(codes2)
+    df1_only_codes = codes1 - codes2
+    df2_only_codes = codes2 - codes1
+
+    logger.info(f"自动匹配统计:")
+    logger.info(f"  - 文件1总编码数: {len(codes1)}")
+    logger.info(f"  - 文件2总编码数: {len(codes2)}")
+    logger.info(f"  - 清理后完全匹配: {len(matched_codes)}")
+    logger.info(f"  - 仅文件1独有: {len(df1_only_codes)}")
+    logger.info(f"  - 仅文件2独有: {len(df2_only_codes)}")
+
+    # 构建自动合并结果
+    merged_data = []
+    pending_data = []
+
+    # 处理完全匹配的
+    for code in matched_codes:
+        row1 = df1[df1['cleaned_code'] == code].iloc[0]
+        row2 = df2[df2['cleaned_code'] == code].iloc[0]
+
+        # 合并信息：优先取非空值
+        merged_data.append({
+            'cleaned_code': code,
+            'original_code_1': row1['original_code'],
+            'original_code_2': row2['original_code'],
+            'product_name': row1['product_name'] if pd.notna(row1['product_name']) else row2['product_name'],
+            'spec': row1['spec'] if pd.notna(row1['spec']) else row2['spec'],
+            'unit': row1['unit'] if pd.notna(row1['unit']) else row2['unit'],
+            'cost_price': row1['cost_price'] if pd.notna(row1['cost_price']) else row2['cost_price'],
+            'sale_price_1': row1['sale_price'],
+            'sale_price_2': row2['sale_price'],
+            'category': row1['category'] if pd.notna(row1['category']) else row2['category'],
+            'source': 'both',
+            'needs_mapping': False,
+        })
+
+    # 处理仅文件1独有的
+    for code in df1_only_codes:
+        row1 = df1[df1['cleaned_code'] == code].iloc[0]
+        merged_data.append({
+            'cleaned_code': code,
+            'original_code_1': row1['original_code'],
+            'original_code_2': None,
+            'product_name': row1['product_name'],
+            'spec': row1['spec'],
+            'unit': row1['unit'],
+            'cost_price': row1['cost_price'],
+            'sale_price_1': row1['sale_price'],
+            'sale_price_2': None,
+            'category': row1['category'],
+            'source': 'file1_only',
+            'needs_mapping': False,
+        })
+
+    # 处理仅文件2独有的
+    for code in df2_only_codes:
+        row2 = df2[df2['cleaned_code'] == code].iloc[0]
+        merged_data.append({
+            'cleaned_code': code,
+            'original_code_1': None,
+            'original_code_2': row2['original_code'],
+            'product_name': row2['product_name'],
+            'spec': row2['spec'],
+            'unit': row2['unit'],
+            'cost_price': row2['cost_price'],
+            'sale_price_1': None,
+            'sale_price_2': row2['sale_price'],
+            'category': row2['category'],
+            'source': 'file2_only',
+            'needs_mapping': False,
+        })
+
+    # 创建DataFrame
+    merged_df = pd.DataFrame(merged_data)
+
+    logger.info(f"自动合并完成，共 {len(merged_df)} 条记录")
+    logger.info(f"需要人工映射: {len(pending_data)} 条")
+
+    # TODO: 后续版本添加基于规格名称模糊匹配发现潜在需要合并的项
+    # 当前版本：只有清理后编码不同就是需要人工匹配，暂不自动探测
+    pending_df = pd.DataFrame(pending_data)
+
+    return merged_df, pending_df
+
+
 if __name__ == '__main__':
     # 这里后续放主逻辑
     pass
