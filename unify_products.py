@@ -256,21 +256,28 @@ def export_pending_mapping(pending_df: pd.DataFrame, output_path: str) -> None:
 
     logger.info(f"导出 {len(pending_df)} 条待人工匹配记录到: {output_path}")
 
+    # 确保输出目录存在
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
     # 创建模板：用户需要填写 final_unified_code
     template_data = []
     for idx, row in pending_df.iterrows():
         template_data.append({
             'original_code_1': row['original_code_1'],
             'original_code_2': row['original_code_2'],
-            'spec_1': row['spec_1'] if 'spec_1' in row else None,
-            'spec_2': row['spec_2'] if 'spec_2' in row else None,
+            'spec_1': row['spec'] if 'spec' in row else None,
+            'spec_2': None,
             'final_unified_code': "",  # 用户填写
             'note': "",  # 用户备注
         })
 
     template_df = pd.DataFrame(template_data)
-    template_df.to_excel(output_path, index=False)
-    logger.info("映射模板导出完成，请填写后重新运行程序")
+    try:
+        template_df.to_excel(output_path, index=False)
+        logger.info("映射模板导出完成，请填写后重新运行程序")
+    except Exception as e:
+        logger.error(f"导出待匹配模板失败: {str(e)}", exc_info=True)
+        raise
 
 
 def read_user_mapping(mapping_file: str) -> Dict[str, str]:
@@ -288,7 +295,11 @@ def read_user_mapping(mapping_file: str) -> Dict[str, str]:
         return {}
 
     logger.info(f"读取用户映射文件: {mapping_file}")
-    df = pd.read_excel(mapping_file, header=0)
+    try:
+        df = pd.read_excel(mapping_file, header=0)
+    except Exception as e:
+        logger.error(f"读取用户映射文件失败: {str(e)}", exc_info=True)
+        return {}
 
     mapping: Dict[str, str] = {}
     filled_count = 0
