@@ -8,7 +8,7 @@
 import pandas as pd
 import logging
 import os
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 # 配置日志系统
 logging.basicConfig(
@@ -26,7 +26,7 @@ OUTPUT_DIR = 'output'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
-def clean_product_code(code) -> str:
+def clean_product_code(code: Optional[Any]) -> str:
     """
     清理产品编码，统一格式：
     - 去除所有空格
@@ -39,6 +39,7 @@ def clean_product_code(code) -> str:
         清理后的编码字符串
     """
     if pd.isna(code):
+        logger.debug(f"输入产品编码为NaN，返回空字符串")
         return ""
 
     code_str = str(code)
@@ -46,6 +47,7 @@ def clean_product_code(code) -> str:
     code_str = code_str.replace(" ", "").strip()
     # 如果为空，返回空字符串
     if not code_str:
+        logger.debug(f"清理后的产品编码为空，输入值: {code}")
         return ""
 
     return code_str
