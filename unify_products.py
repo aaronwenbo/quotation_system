@@ -464,6 +464,74 @@ def build_final_products(
     return final_df, mapping_df
 
 
+def update_stock_codes(
+    stock_file_path: str,
+    full_mapping: pd.DataFrame
+) -> pd.DataFrame:
+    """
+    使用统一编码更新库存文件中的产品编码
+
+    Args:
+        stock_file_path: 原始库存文件路径
+        full_mapping: 完整映射表
+
+    Returns:
+        更新后的库存DataFrame
+    """
+    logger.info(f"读取原始库存文件: {stock_file_path}")
+
+    # 读取库存文件
+    df_stock = pd.read_excel(stock_file_path, sheet_name=0, header=0)
+    logger.info(f"原始库存共 {len(df_stock)} 行")
+
+    # 构建映射字典 original_code -> unified_code
+    mapping_dict: Dict[str, str] = {}
+    for idx, row in full_mapping.iterrows():
+        mapping_dict[str(row['original_code'])] = str(row['unified_code'])
+
+    logger.info(f"构建了 {len(mapping_dict)} 条编码映射关系")
+
+    # 更新产品编码列
+    # 库存列名是 "产品编码*"
+    product_code_col = '产品编码*'
+    updated_count = 0
+    not_found_count = 0
+    not_found_codes: List[str] = []
+
+    def map_code(original_code) -> str:
+        nonlocal updated_count, not_found_count, not_found_codes
+        original_str = str(original_code)
+        # 先清理原始编码
+        cleaned_original = clean_product_code(original_str)
+        # 在映射中查找
+        # 先尝试原始字符串
+        if original_str in mapping_dict:
+            updated_count += 1
+            return mapping_dict[original_str]
+        # 再尝试清理后的编码
+        elif cleaned_original in mapping_dict:
+            updated_count += 1
+            return mapping_dict[cleaned_original]
+        else:
+            not_found_count += 1
+            not_found_codes.append(original_str)
+            return original_str  # 保留原始编码
+
+    # 应用映射
+    df_stock['统一产品编码'] = df_stock[product_code_col].apply(map_code)
+
+    logger.info(f"库存更新完成:")
+    logger.info(f"  - 成功更新编码: {updated_count} 行")
+    logger.info(f"  - 未找到映射，保留原始编码: {not_found_count} 行")
+
+    if not_found_count > 0:
+        logger.warning(f"未找到映射的编码: {not_found_codes[:20]}")
+        if len(not_found_codes) > 20:
+            logger.warning(f"... 共 {len(not_found_codes)} 个未找到")
+
+    return df_stock
+
+
 if __name__ == '__main__':
     # 这里后续放主逻辑
     pass
