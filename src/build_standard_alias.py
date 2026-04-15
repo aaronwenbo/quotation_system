@@ -161,7 +161,6 @@ def find_aliases_by_rules(df: pd.DataFrame) -> Tuple[List[dict], set]:
 
         logger.info(f"规格 '{spec_name}' 有 {len(group)} 个产品，检查别名...")
         codes = list(group['unified_code'])
-        checked = set()  # 已经被标记为别名的不再参与检测
 
         # 两两比较
         for i in range(len(codes)):
