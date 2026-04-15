@@ -225,5 +225,97 @@ def main():
     alias_records, alias_codes = find_aliases_by_rules(df)
     logger.info(f"共发现 {len(alias_records)} 个别名，涉及 {len(alias_codes)} 个唯一编码")
 
+    # 构建标准产品库：过滤掉被标记为别名的行
+    df_standard = df[~df['unified_code'].isin(alias_codes)].copy()
+    logger.info(f"标准产品库生成完成，共 {len(df_standard)} 个标准产品")
+
+    # 构建别名映射表
+    alias_mapping_data = []
+    current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    for alias_code, standard_code, rule_name, spec_name in alias_records:
+        alias_mapping_data.append({
+            '别名': alias_code,
+            '统一编码': standard_code,
+            '别名类型': rule_name,
+            '来源': '自动发现',
+            '创建时间': current_date,
+            '备注': spec_name
+        })
+
+    # 如果原有文件存在，读取并追加
+    alias_mapping_file = os.path.join(DATA_DIR, 'alias_mapping.xlsx')
+    if os.path.exists(alias_mapping_file) and os.path.getsize(alias_mapping_file) > 0:
+        try:
+            existing_df = pd.read_excel(alias_mapping_file)
+            logger.info(f"读取已有别名映射，现有 {len(existing_df)} 条")
+            new_df = pd.DataFrame(alias_mapping_data)
+            # 去重：避免重复添加同一个别名
+            combined_df = pd.concat([existing_df, new_df], ignore_index=True)
+            combined_df = combined_df.drop_duplicates(subset=['别名', '统一编码'], keep='last')
+            alias_mapping_df = combined_df
+        except Exception as e:
+            logger.warning(f"读取现有文件失败，创建新文件: {e}")
+            alias_mapping_df = pd.DataFrame(alias_mapping_data)
+    else:
+        alias_mapping_df = pd.DataFrame(alias_mapping_data)
+
+    logger.info(f"别名映射表共 {len(alias_mapping_df)} 条记录")
+
+    # 构建标准产品带别名汇总表
+    # 先构建：标准编码 -> [(别名, 规则), ...]
+    standard_to_aliases: Dict[str, List[Tuple[str, str]]] = {}
+    for alias_code, standard_code, rule_name, _ in alias_records:
+        if standard_code not in standard_to_aliases:
+            standard_to_aliases[standard_code] = []
+        standard_to_aliases[standard_code].append((alias_code, rule_name))
+
+    # 构建汇总数据
+    summary_data = []
+    for _, row in df_standard.iterrows():
+        code = row['unified_code']
+        aliases = standard_to_aliases.get(code, [])
+        alias_list_str = ','.join([a[0] for a in aliases]) if aliases else ''
+        rule_list_str = ','.join([a[1] for a in aliases]) if aliases else ''
+
+        summary_data.append({
+            'unified_code': row['unified_code'],
+            'product_name': row['product_name'],
+            'spec': row['spec'],
+            'sale_price': row['sale_price'],
+            '别名列表': alias_list_str,
+            '别名规则': rule_list_str
+        })
+
+    summary_df = pd.DataFrame(summary_data)
+    logger.info(f"汇总表生成完成，共 {len(summary_df)} 行")
+
+    # 保存标准产品库
+    standard_file = os.path.join(OUTPUT_DIR, 'product_standard.xlsx')
+    df_standard.to_excel(standard_file, index=False)
+    logger.info(f"标准产品库已保存: {standard_file}")
+
+    # 保存别名映射表
+    alias_mapping_file = os.path.join(DATA_DIR, 'alias_mapping.xlsx')
+    alias_mapping_df.to_excel(alias_mapping_file, index=False)
+    logger.info(f"别名映射表已保存: {alias_mapping_file}")
+
+    # 保存汇总表
+    summary_file = os.path.join(OUTPUT_DIR, 'standard_with_aliases.xlsx')
+    summary_df.to_excel(summary_file, index=False)
+    logger.info(f"标准带别名汇总表已保存: {summary_file}")
+
+    # 输出最终统计
+    logger.info("=" * 60)
+    logger.info("处理完成！最终统计:")
+    logger.info(f"  - 原统一产品库总数: {len(df)}")
+    logger.info(f"  - 自动发现别名数量: {len(alias_records)}")
+    logger.info(f"  - 标准产品库剩余: {len(df_standard)}")
+    logger.info(f"  - 输出文件:")
+    logger.info(f"    - {standard_file}")
+    logger.info(f"    - {alias_mapping_file}")
+    logger.info(f"    - {summary_file}")
+    logger.info("=" * 60)
+
 if __name__ == '__main__':
     main()
