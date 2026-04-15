@@ -142,6 +142,76 @@ def check_rule3(code1: str, code2: str) -> Tuple[bool, Optional[str]]:
     return False, None
 
 
+def find_aliases_by_rules(df: pd.DataFrame) -> Tuple[List[dict], set]:
+    """
+    按规则找出所有别名
+    返回：
+    - alias_records: [(alias_code, standard_code, rule_name, spec), ...]
+    - alias_codes_set: 所有被标记为别名的编码集合
+    """
+    alias_records = []
+    alias_codes = set()
+
+    # 按规格分组
+    spec_groups = df.groupby('spec')
+
+    for spec_name, group in spec_groups:
+        if len(group) <= 1:
+            continue  # 同规格只有一个产品，不可能有别名
+
+        logger.info(f"规格 '{spec_name}' 有 {len(group)} 个产品，检查别名...")
+        codes = list(group['unified_code'])
+        checked = set()  # 已经被标记为别名的不再参与检测
+
+        # 两两比较
+        for i in range(len(codes)):
+            code1 = codes[i]
+            if code1 in alias_codes:
+                continue  # 已经是别名，跳过
+
+            for j in range(i + 1, len(codes)):
+                code2 = codes[j]
+                if code2 in alias_codes:
+                    continue  # 已经是别名，跳过
+
+                # 依次检查三条规则
+                # 规则一
+                is_match, alias_side = check_rule1(code1, code2)
+                if is_match:
+                    if alias_side == 'code1':
+                        alias_records.append((code1, code2, '规则一', str(spec_name)))
+                        alias_codes.add(code1)
+                    else:
+                        alias_records.append((code2, code1, '规则一', str(spec_name)))
+                        alias_codes.add(code2)
+                    continue
+
+                # 规则二
+                is_match, alias_side = check_rule2(code1, code2)
+                if is_match:
+                    if alias_side == 'code1':
+                        alias_records.append((code1, code2, '规则二', str(spec_name)))
+                        alias_codes.add(code1)
+                    else:
+                        alias_records.append((code2, code1, '规则二', str(spec_name)))
+                        alias_codes.add(code2)
+                    continue
+
+                # 规则三
+                is_match, alias_side = check_rule3(code1, code2)
+                if is_match:
+                    if alias_side == 'code1':
+                        alias_records.append((code1, code2, '规则三', str(spec_name)))
+                        alias_codes.add(code1)
+                    else:
+                        alias_records.append((code2, code1, '规则三', str(spec_name)))
+                        alias_codes.add(code2)
+                    continue
+
+    logger.info(f"检测完成，共发现 {len(alias_records)} 个别名")
+    return alias_records, alias_codes
+
+
 def main():
     logger.info("=" * 60)
     logger.info("产品别名整理工具 开始运行")
@@ -152,7 +222,9 @@ def main():
     df = pd.read_excel(input_file)
     logger.info(f"读取统一产品库完成，共 {len(df)} 个产品")
 
-    # TODO: 后续步骤
+    # 检测所有别名
+    alias_records, alias_codes = find_aliases_by_rules(df)
+    logger.info(f"共发现 {len(alias_records)} 个别名，涉及 {len(alias_codes)} 个唯一编码")
 
 if __name__ == '__main__':
     main()
