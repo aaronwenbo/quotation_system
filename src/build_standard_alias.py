@@ -11,22 +11,29 @@ import os
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
 
+# 获取项目根目录
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+# 定义目录路径
+LOG_DIR = os.path.join(PROJECT_ROOT, 'logs')
+OUTPUT_DIR = os.path.join(PROJECT_ROOT, 'output')
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
+
+# 确保目录存在
+os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(DATA_DIR, exist_ok=True)
+
 # 配置日志系统
-os.makedirs('logs', exist_ok=True)
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('logs/build_standard_alias.log', encoding='utf-8')
+        logging.FileHandler(os.path.join(LOG_DIR, 'build_standard_alias.log'), encoding='utf-8')
     ]
 )
 logger = logging.getLogger(__name__)
-
-# 输出目录
-OUTPUT_DIR = 'output'
-DATA_DIR = 'data'
-os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 def main():
     logger.info("=" * 60)
