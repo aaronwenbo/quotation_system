@@ -232,3 +232,32 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
 
     return df
+
+
+def main():
+    """主函数：处理所有订单文件"""
+    logger.info("=" * 50)
+    logger.info("开始订单报价处理")
+    logger.info("=" * 50)
+
+    # 加载标准产品库
+    standard_lib = load_standard_library()
+
+    # 处理主订单
+    df_main = process_main_order(standard_lib)
+    output_main = os.path.join(OUTPUT_DIR, '20260420_quoted.xlsx')
+    df_main.to_excel(output_main, index=False, header=False)
+    logger.info(f"主订单结果已保存到: {output_main}")
+
+    # 处理HT订单
+    df_ht = process_ht_order(standard_lib)
+    output_ht = os.path.join(OUTPUT_DIR, 'HT_quoted.xlsx')
+    df_ht.to_excel(output_ht, index=False, header=False)
+    logger.info(f"HT订单结果已保存到: {output_ht}")
+
+    logger.info("=" * 50)
+    logger.info("所有订单报价处理完成")
+    logger.info("=" * 50)
+
+if __name__ == '__main__':
+    main()
