@@ -56,10 +56,12 @@ def load_standard_library() -> Dict[str, Dict]:
 
 
 def clean_code(code: Optional[str]) -> str:
-    """清理产品编码，去除空格"""
+    """清理产品编码：按空格取前半部分，然后去除空格"""
     if pd.isna(code) or code is None:
         return ''
-    return str(code).replace(' ', '').strip()
+    # 先按空格分割取前半部分（处理 HT 格式如 "22612-06-08 S22"）
+    code_str = str(code).strip().split(' ')[0]
+    return code_str.replace(' ', '').strip()
 
 
 def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict], str]:
