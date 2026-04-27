@@ -89,3 +89,87 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
         return standard_lib[code_converted], "O→0转换匹配"
 
     return None, "无匹配"
+
+
+def is_product_code(code: str) -> bool:
+    """判断是否为产品编码（非标题行）"""
+    code_clean = clean_code(code)
+    if not code_clean:
+        return False
+    # 排除标题关键词
+    exclude_keywords = ['FERRULE', 'PART', 'NO', 'HOSE', 'BSP', 'JIC', 'METRIC',
+                        'SAE', 'FLANGE', 'CONNECTOR', 'BANJO', 'JIS', 'ORFS', 'ITEM',
+                        'FOR', 'EN', 'ISO', 'DIN', 'GB/T', 'L.T.', 'H.T.', 'SEAT']
+    for kw in exclude_keywords:
+        if kw.upper() in code_clean.upper():
+            return False
+    # 产品编码通常包含'-'且长度在5-20之间
+    return '-' in code_clean and 5 <= len(code_clean) <= 20
+
+
+def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
+    """
+    处理20260420.xlsx主订单文件
+
+    Returns:
+        处理后的DataFrame
+    """
+    logger.info("正在处理主订单文件 20260420.xlsx...")
+    df = pd.read_excel(ORDER_20260420_PATH, header=None)
+
+    # 确保有足够的列（扩展到K列，索引10）
+    while len(df.columns) < 11:
+        df[len(df.columns)] = None
+
+    # 统计变量
+    total_rows = 0
+    direct_match = 0
+    o0_match = 0
+    no_match = 0
+    no_match_codes = []
+
+    for idx, row in df.iterrows():
+        code = row.iloc[0]
+
+        if not is_product_code(code):
+            continue
+
+        total_rows += 1
+        product_info, match_label = match_code(code, standard_lib)
+
+        if product_info:
+            # G列 = 价格
+            df.iloc[idx, 6] = product_info['价格']
+            # I列 = 标准编码（O→0转换后的）
+            df.iloc[idx, 8] = clean_code(code).replace('O', '0').replace('o', '0') if 'O→0' in match_label else clean_code(code)
+            # J列 = 原规格编码
+            df.iloc[idx, 9] = product_info['原规格编码']
+            # K列 = 匹配标注
+            df.iloc[idx, 10] = match_label
+
+            if match_label == "直接匹配":
+                direct_match += 1
+            else:
+                o0_match += 1
+        else:
+            df.iloc[idx, 10] = match_label
+            no_match += 1
+            no_match_codes.append(clean_code(code))
+
+        # H列 = 总价 = F列数量 × G列单价
+        quantity = row.iloc[5]
+        price = df.iloc[idx, 6]
+        if pd.notna(quantity) and pd.notna(price):
+            try:
+                df.iloc[idx, 7] = float(quantity) * float(price)
+            except (ValueError, TypeError):
+                pass
+
+    logger.info(f"主订单处理完成: 共 {total_rows} 行产品")
+    logger.info(f"  直接匹配: {direct_match} 行")
+    logger.info(f"  O→0转换匹配: {o0_match} 行")
+    logger.info(f"  无匹配: {no_match} 行")
+    if no_match_codes:
+        logger.info(f"  无匹配编码列表: {no_match_codes}")
+
+    return df
