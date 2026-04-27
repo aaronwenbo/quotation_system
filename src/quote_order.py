@@ -173,3 +173,62 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
 
     return df
+
+
+def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
+    """
+    处理HT.xlsx订单文件
+
+    Returns:
+        处理后的DataFrame
+    """
+    logger.info("正在处理HT订单文件 HT.xlsx...")
+    df = pd.read_excel(ORDER_HT_PATH, header=None)
+
+    # 确保有足够的列（扩展到F列，索引5）
+    while len(df.columns) < 6:
+        df[len(df.columns)] = None
+
+    # 统计变量
+    total_rows = 0
+    direct_match = 0
+    o0_match = 0
+    no_match = 0
+    no_match_codes = []
+
+    for idx, row in df.iterrows():
+        code = row.iloc[0]
+
+        if not is_product_code(code):
+            continue
+
+        total_rows += 1
+        product_info, match_label = match_code(code, standard_lib)
+
+        if product_info:
+            # C列 = 价格
+            df.iloc[idx, 2] = product_info['价格']
+            # D列 = 标准编码
+            df.iloc[idx, 3] = clean_code(code).replace('O', '0').replace('o', '0') if 'O→0' in match_label else clean_code(code)
+            # E列 = 原规格编码
+            df.iloc[idx, 4] = product_info['原规格编码']
+            # F列 = 匹配标注
+            df.iloc[idx, 5] = match_label
+
+            if match_label == "直接匹配":
+                direct_match += 1
+            else:
+                o0_match += 1
+        else:
+            df.iloc[idx, 5] = match_label
+            no_match += 1
+            no_match_codes.append(clean_code(code))
+
+    logger.info(f"HT订单处理完成: 共 {total_rows} 行产品")
+    logger.info(f"  直接匹配: {direct_match} 行")
+    logger.info(f"  O→0转换匹配: {o0_match} 行")
+    logger.info(f"  无匹配: {no_match} 行")
+    if no_match_codes:
+        logger.info(f"  无匹配编码列表: {no_match_codes}")
+
+    return df
