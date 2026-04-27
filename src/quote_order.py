@@ -88,20 +88,33 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
     if code_clean in standard_lib:
         return standard_lib[code_clean], "直接匹配"
 
-    # 规则一：第五位是2时改为1匹配
+    # 规则一：第五位1和2互换匹配（双向）
     code_no_dash = code_clean.replace('-', '')
-    if len(code_no_dash) >= 5 and code_no_dash[4] == '2':
+    if len(code_no_dash) >= 5 and code_no_dash[4] in ('1', '2'):
+        fifth_char = code_no_dash[4]
+        # 找到第五个非-字符的位置
         code_list = list(code_clean)
         non_dash_count = 0
+        fifth_pos = -1
         for i, c in enumerate(code_list):
             if c != '-':
                 non_dash_count += 1
-                if non_dash_count == 5 and c == '2':
-                    code_list[i] = '1'
+                if non_dash_count == 5:
+                    fifth_pos = i
                     break
-        code_1 = ''.join(code_list)
-        if code_1 in standard_lib:
-            return standard_lib[code_1], "规则一(2→1)匹配"
+
+        if fifth_pos >= 0:
+            # 1→2 或 2→1 转换
+            if fifth_char == '1':
+                code_list[fifth_pos] = '2'
+                code_converted = ''.join(code_list)
+                if code_converted in standard_lib:
+                    return standard_lib[code_converted], "规则一(1→2)匹配"
+            elif fifth_char == '2':
+                code_list[fifth_pos] = '1'
+                code_converted = ''.join(code_list)
+                if code_converted in standard_lib:
+                    return standard_lib[code_converted], "规则一(2→1)匹配"
 
     # 规则二：末尾带T时去掉T匹配
     if code_clean.endswith('T'):
@@ -161,7 +174,8 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
     # 统计变量
     total_rows = 0
     direct_match = 0
-    rule1_match = 0
+    rule1_2to1_match = 0
+    rule1_1to2_match = 0
     rule2_match = 0
     rule3_match = 0
     rule4_match = 0
@@ -186,13 +200,19 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
                 code_no_dash = std_code.replace('-', '')
                 code_list = list(std_code)
                 non_dash_count = 0
+                fifth_pos = -1
                 for i, c in enumerate(code_list):
                     if c != '-':
                         non_dash_count += 1
-                        if non_dash_count == 5 and c == '2':
-                            code_list[i] = '1'
+                        if non_dash_count == 5:
+                            fifth_pos = i
                             break
-                std_code = ''.join(code_list)
+                if fifth_pos >= 0:
+                    if '2→1' in match_label:
+                        code_list[fifth_pos] = '1'
+                    elif '1→2' in match_label:
+                        code_list[fifth_pos] = '2'
+                    std_code = ''.join(code_list)
             elif '规则二' in match_label:
                 std_code = std_code[:-1]
             elif '规则三' in match_label:
@@ -213,7 +233,9 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
             if match_label == "直接匹配":
                 direct_match += 1
             elif match_label == "规则一(2→1)匹配":
-                rule1_match += 1
+                rule1_2to1_match += 1
+            elif match_label == "规则一(1→2)匹配":
+                rule1_1to2_match += 1
             elif match_label == "规则二(去T)匹配":
                 rule2_match += 1
             elif match_label == "规则三(去*)匹配":
@@ -236,7 +258,8 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"主订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  规则一(2→1)匹配: {rule1_match} 行")
+    logger.info(f"  规则一(2→1)匹配: {rule1_2to1_match} 行")
+    logger.info(f"  规则一(1→2)匹配: {rule1_1to2_match} 行")
     logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
     logger.info(f"  规则三(去*)匹配: {rule3_match} 行")
     logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
@@ -264,7 +287,8 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
     # 统计变量
     total_rows = 0
     direct_match = 0
-    rule1_match = 0
+    rule1_2to1_match = 0
+    rule1_1to2_match = 0
     rule2_match = 0
     rule3_match = 0
     rule4_match = 0
@@ -289,13 +313,19 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
                 code_no_dash = std_code.replace('-', '')
                 code_list = list(std_code)
                 non_dash_count = 0
+                fifth_pos = -1
                 for i, c in enumerate(code_list):
                     if c != '-':
                         non_dash_count += 1
-                        if non_dash_count == 5 and c == '2':
-                            code_list[i] = '1'
+                        if non_dash_count == 5:
+                            fifth_pos = i
                             break
-                std_code = ''.join(code_list)
+                if fifth_pos >= 0:
+                    if '2→1' in match_label:
+                        code_list[fifth_pos] = '1'
+                    elif '1→2' in match_label:
+                        code_list[fifth_pos] = '2'
+                    std_code = ''.join(code_list)
             elif '规则二' in match_label:
                 std_code = std_code[:-1]
             elif '规则三' in match_label:
@@ -316,7 +346,9 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
             if match_label == "直接匹配":
                 direct_match += 1
             elif match_label == "规则一(2→1)匹配":
-                rule1_match += 1
+                rule1_2to1_match += 1
+            elif match_label == "规则一(1→2)匹配":
+                rule1_1to2_match += 1
             elif match_label == "规则二(去T)匹配":
                 rule2_match += 1
             elif match_label == "规则三(去*)匹配":
@@ -330,7 +362,8 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"HT订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  规则一(2→1)匹配: {rule1_match} 行")
+    logger.info(f"  规则一(2→1)匹配: {rule1_2to1_match} 行")
+    logger.info(f"  规则一(1→2)匹配: {rule1_1to2_match} 行")
     logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
     logger.info(f"  规则三(去*)匹配: {rule3_match} 行")
     logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
