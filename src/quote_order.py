@@ -53,3 +53,39 @@ def load_standard_library() -> Dict[str, Dict]:
 
     logger.info(f"标准产品库加载完成，共 {len(lib)} 个产品")
     return lib
+
+
+def clean_code(code: Optional[str]) -> str:
+    """清理产品编码，去除空格"""
+    if pd.isna(code) or code is None:
+        return ''
+    return str(code).replace(' ', '').strip()
+
+
+def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict], str]:
+    """
+    匹配产品编码，支持O→0转换容错
+
+    Args:
+        code: 待匹配的产品编码
+        standard_lib: 标准产品库字典
+
+    Returns:
+        (产品信息字典, 匹配类型标注)
+        匹配类型: "直接匹配" / "O→0转换匹配" / "" (无匹配)
+    """
+    code_clean = clean_code(code)
+
+    if not code_clean:
+        return None, ''
+
+    # 直接匹配
+    if code_clean in standard_lib:
+        return standard_lib[code_clean], "直接匹配"
+
+    # O→0转换匹配
+    code_converted = code_clean.replace('O', '0').replace('o', '0')
+    if code_converted != code_clean and code_converted in standard_lib:
+        return standard_lib[code_converted], "O→0转换匹配"
+
+    return None, "无匹配"
