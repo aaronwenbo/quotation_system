@@ -30,3 +30,26 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 STANDARD_LIB_PATH = '../data/standard_product_library.xlsx'
 ORDER_20260420_PATH = '../order/20260420.xlsx'
 ORDER_HT_PATH = '../order/HT.xlsx'
+
+
+def load_standard_library() -> Dict[str, Dict]:
+    """
+    加载标准产品库，构建编码→产品信息的映射字典
+
+    Returns:
+        Dict: {标准编码: {'价格': float, '原规格编码': str, '规格': str}}
+    """
+    logger.info("正在加载标准产品库...")
+    df = pd.read_excel(STANDARD_LIB_PATH)
+
+    lib = {}
+    for _, row in df.iterrows():
+        code = str(row['标准编码']).strip()
+        lib[code] = {
+            '价格': row['价格'],
+            '原规格编码': str(row['原规格编码']).strip(),
+            '规格': str(row['规格']).strip()
+        }
+
+    logger.info(f"标准产品库加载完成，共 {len(lib)} 个产品")
+    return lib
