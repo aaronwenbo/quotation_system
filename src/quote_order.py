@@ -84,12 +84,7 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
     if not code_clean:
         return None, ''
 
-    # ========== 第一层：直接匹配 ==========
-    if code_clean in standard_lib:
-        return standard_lib[code_clean], "直接匹配"
-
-    # ========== 第二层：规则一（第五位1↔2） ==========
-    # 工具函数：第五位1↔2转换
+    # ========== 工具函数：第五位1↔2转换 ==========
     def apply_rule1(c):
         code_no_dash = c.replace('-', '')
         if len(code_no_dash) < 5 or code_no_dash[4] not in ('1', '2'):
@@ -110,20 +105,20 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
             return ''.join(code_list), f"{fifth_char}→{target_char}"
         return None, None
 
-    # 独立规则一
-    c, direction = apply_rule1(code_clean)
-    if c and c in standard_lib:
-        return standard_lib[c], f"规则一({direction})匹配"
+    # ========== 第一步：生成所有预处理变体（规则二、规则三） ==========
+    # 格式: (变体编码, 预处理标记)
+    variants = []
 
-    # ========== 第三层：清理规则（规则二、规则三） ==========
-    # 规则二：去T
+    # 变体1：原始编码（无预处理）
+    variants.append((code_clean, ""))
+
+    # 变体2：去T后（规则二）
     code_no_t = None
     if code_clean.endswith('T'):
         code_no_t = code_clean[:-1]
-        if code_no_t in standard_lib:
-            return standard_lib[code_no_t], "规则二(去T)匹配"
+        variants.append((code_no_t, "去T"))
 
-    # 规则三：去*
+    # 变体3：去*后（规则三）
     code_no_star = None
     if '*' in code_clean:
         star_pos = code_clean.find('*')
@@ -132,40 +127,47 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
             code_no_star = code_clean[:star_pos] + code_clean[next_dash_pos:]
         else:
             code_no_star = code_clean[:star_pos]
-        if code_no_star in standard_lib:
-            return standard_lib[code_no_star], "规则三(去*)匹配"
+        variants.append((code_no_star, "去*"))
 
-    # ========== 第四层：清理 + 规则一（1↔2） ==========
-    # 规则二 + 规则一
-    if code_no_t:
-        c, direction = apply_rule1(code_no_t)
+    # 变体4：去T后再去*（规则二+规则三）
+    if code_no_t and '*' in code_no_t:
+        star_pos = code_no_t.find('*')
+        next_dash_pos = code_no_t.find('-', star_pos)
+        if next_dash_pos > star_pos:
+            code_no_t_star = code_no_t[:star_pos] + code_no_t[next_dash_pos:]
+        else:
+            code_no_t_star = code_no_t[:star_pos]
+        variants.append((code_no_t_star, "去T+去*"))
+
+    # 变体5：去*后再去T（规则三+规则二）
+    if code_no_star and code_no_star.endswith('T'):
+        code_no_star_t = code_no_star[:-1]
+        variants.append((code_no_star_t, "去*+去T"))
+
+    # ========== 第二步：对每个变体尝试各种匹配策略 ==========
+    for variant_code, preprocess in variants:
+        # 策略1：直接匹配
+        if variant_code in standard_lib:
+            if preprocess:
+                return standard_lib[variant_code], f"{preprocess}匹配"
+            else:
+                return standard_lib[variant_code], "直接匹配"
+
+        # 策略2：规则一（1↔2）
+        c, direction = apply_rule1(variant_code)
         if c and c in standard_lib:
-            return standard_lib[c], f"规则二+一(去T,{direction})匹配"
+            if preprocess:
+                return standard_lib[c], f"{preprocess}+1↔2({direction})匹配"
+            else:
+                return standard_lib[c], f"规则一({direction})匹配"
 
-    # 规则三 + 规则一
-    if code_no_star:
-        c, direction = apply_rule1(code_no_star)
-        if c and c in standard_lib:
-            return standard_lib[c], f"规则三+一(去*,{direction})匹配"
-
-    # ========== 第四层：规则四（O→0） ==========
-    code_o0 = code_clean.replace('O', '0').replace('o', '0')
-    if code_o0 != code_clean:
-        # 单独规则四
-        if code_o0 in standard_lib:
-            return standard_lib[code_o0], "规则四(O→0)匹配"
-
-        # 规则四 + 规则二
-        code_o0_no_t = None
-        if code_o0.endswith('T'):
-            code_o0_no_t = code_o0[:-1]
-            if code_o0_no_t in standard_lib:
-                return standard_lib[code_o0_no_t], "规则四+二(O→0,去T)匹配"
-
-            # 规则四 + 规则二 + 规则一
-            c, direction = apply_rule1(code_o0_no_t)
-            if c and c in standard_lib:
-                return standard_lib[c], f"规则四+二+一(O→0,去T,{direction})匹配"
+        # 策略3：规则四（O→0）
+        code_o0 = variant_code.replace('O', '0').replace('o', '0')
+        if code_o0 != variant_code and code_o0 in standard_lib:
+            if preprocess:
+                return standard_lib[code_o0], f"{preprocess}+O→0匹配"
+            else:
+                return standard_lib[code_o0], "规则四(O→0)匹配"
 
     return None, "无匹配"
 
@@ -233,15 +235,15 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
             df.iloc[idx, 10] = match_label
 
             # 统计分类
-            if "直接匹配" in match_label:
+            if "直接匹配" == match_label:
                 stats["直接匹配"] += 1
             elif "+" in match_label:
                 stats["规则组合"] += 1
             elif "规则一" in match_label:
                 stats["规则一"] += 1
-            elif "规则二" in match_label:
+            elif "去T" == match_label or "去T匹配" == match_label:
                 stats["规则二"] += 1
-            elif "规则三" in match_label:
+            elif "去*" == match_label or "去*匹配" == match_label:
                 stats["规则三"] += 1
             elif "规则四" in match_label:
                 stats["规则四"] += 1
@@ -261,10 +263,10 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"主订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {stats['直接匹配']} 行")
-    logger.info(f"  规则一: {stats['规则一']} 行")
-    logger.info(f"  规则二: {stats['规则二']} 行")
-    logger.info(f"  规则三: {stats['规则三']} 行")
-    logger.info(f"  规则四: {stats['规则四']} 行")
+    logger.info(f"  规则一(1↔2): {stats['规则一']} 行")
+    logger.info(f"  规则二(去T): {stats['规则二']} 行")
+    logger.info(f"  规则三(去*): {stats['规则三']} 行")
+    logger.info(f"  规则四(O→0): {stats['规则四']} 行")
     logger.info(f"  规则组合: {stats['规则组合']} 行")
     logger.info(f"  无匹配: {stats['无匹配']} 行")
     if no_match_codes:
@@ -320,15 +322,15 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
             df.iloc[idx, 5] = match_label
 
             # 统计分类
-            if "直接匹配" in match_label:
+            if "直接匹配" == match_label:
                 stats["直接匹配"] += 1
             elif "+" in match_label:
                 stats["规则组合"] += 1
             elif "规则一" in match_label:
                 stats["规则一"] += 1
-            elif "规则二" in match_label:
+            elif "去T" == match_label or "去T匹配" == match_label:
                 stats["规则二"] += 1
-            elif "规则三" in match_label:
+            elif "去*" == match_label or "去*匹配" == match_label:
                 stats["规则三"] += 1
             elif "规则四" in match_label:
                 stats["规则四"] += 1
@@ -339,10 +341,10 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"HT订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {stats['直接匹配']} 行")
-    logger.info(f"  规则一: {stats['规则一']} 行")
-    logger.info(f"  规则二: {stats['规则二']} 行")
-    logger.info(f"  规则三: {stats['规则三']} 行")
-    logger.info(f"  规则四: {stats['规则四']} 行")
+    logger.info(f"  规则一(1↔2): {stats['规则一']} 行")
+    logger.info(f"  规则二(去T): {stats['规则二']} 行")
+    logger.info(f"  规则三(去*): {stats['规则三']} 行")
+    logger.info(f"  规则四(O→0): {stats['规则四']} 行")
     logger.info(f"  规则组合: {stats['规则组合']} 行")
     logger.info(f"  无匹配: {stats['无匹配']} 行")
     if no_match_codes:
