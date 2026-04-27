@@ -66,7 +66,11 @@ def clean_code(code: Optional[str]) -> str:
 
 def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict], str]:
     """
-    匹配产品编码，支持O→0转换容错
+    匹配产品编码，按优先级应用四条规则：
+    1. 直接匹配
+    2. 规则一：第五位是2时改为1匹配
+    3. 规则二：末尾带T时去掉T匹配
+    4. 规则四：O→0转换匹配
 
     Args:
         code: 待匹配的产品编码
@@ -74,21 +78,41 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
 
     Returns:
         (产品信息字典, 匹配类型标注)
-        匹配类型: "直接匹配" / "O→0转换匹配" / "" (无匹配)
     """
     code_clean = clean_code(code)
 
     if not code_clean:
         return None, ''
 
-    # 直接匹配
+    # 规则0：直接匹配
     if code_clean in standard_lib:
         return standard_lib[code_clean], "直接匹配"
 
-    # O→0转换匹配
+    # 规则一：第五位是2时改为1匹配
+    code_no_dash = code_clean.replace('-', '')
+    if len(code_no_dash) >= 5 and code_no_dash[4] == '2':
+        code_list = list(code_clean)
+        non_dash_count = 0
+        for i, c in enumerate(code_list):
+            if c != '-':
+                non_dash_count += 1
+                if non_dash_count == 5 and c == '2':
+                    code_list[i] = '1'
+                    break
+        code_1 = ''.join(code_list)
+        if code_1 in standard_lib:
+            return standard_lib[code_1], "规则一(2→1)匹配"
+
+    # 规则二：末尾带T时去掉T匹配
+    if code_clean.endswith('T'):
+        code_no_t = code_clean[:-1]
+        if code_no_t in standard_lib:
+            return standard_lib[code_no_t], "规则二(去T)匹配"
+
+    # 规则四：O→0转换匹配
     code_converted = code_clean.replace('O', '0').replace('o', '0')
     if code_converted != code_clean and code_converted in standard_lib:
-        return standard_lib[code_converted], "O→0转换匹配"
+        return standard_lib[code_converted], "规则四(O→0)匹配"
 
     return None, "无匹配"
 
@@ -126,7 +150,9 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
     # 统计变量
     total_rows = 0
     direct_match = 0
-    o0_match = 0
+    rule1_match = 0
+    rule2_match = 0
+    rule4_match = 0
     no_match = 0
     no_match_codes = []
 
@@ -142,8 +168,24 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
         if product_info:
             # G列 = 价格
             df.iloc[idx, 6] = product_info['价格']
-            # I列 = 标准编码（O→0转换后的）
-            df.iloc[idx, 8] = clean_code(code).replace('O', '0').replace('o', '0') if 'O→0' in match_label else clean_code(code)
+            # I列 = 标准编码（转换后的）
+            std_code = clean_code(code)
+            if '规则一' in match_label:
+                code_no_dash = std_code.replace('-', '')
+                code_list = list(std_code)
+                non_dash_count = 0
+                for i, c in enumerate(code_list):
+                    if c != '-':
+                        non_dash_count += 1
+                        if non_dash_count == 5 and c == '2':
+                            code_list[i] = '1'
+                            break
+                std_code = ''.join(code_list)
+            elif '规则二' in match_label:
+                std_code = std_code[:-1]
+            elif '规则四' in match_label:
+                std_code = std_code.replace('O', '0').replace('o', '0')
+            df.iloc[idx, 8] = std_code
             # J列 = 原规格编码
             df.iloc[idx, 9] = product_info['原规格编码']
             # K列 = 匹配标注
@@ -151,8 +193,12 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
             if match_label == "直接匹配":
                 direct_match += 1
-            else:
-                o0_match += 1
+            elif match_label == "规则一(2→1)匹配":
+                rule1_match += 1
+            elif match_label == "规则二(去T)匹配":
+                rule2_match += 1
+            elif match_label == "规则四(O→0)匹配":
+                rule4_match += 1
         else:
             df.iloc[idx, 10] = match_label
             no_match += 1
@@ -169,7 +215,9 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"主订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  O→0转换匹配: {o0_match} 行")
+    logger.info(f"  规则一(2→1)匹配: {rule1_match} 行")
+    logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
+    logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
     logger.info(f"  无匹配: {no_match} 行")
     if no_match_codes:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
@@ -194,7 +242,9 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
     # 统计变量
     total_rows = 0
     direct_match = 0
-    o0_match = 0
+    rule1_match = 0
+    rule2_match = 0
+    rule4_match = 0
     no_match = 0
     no_match_codes = []
 
@@ -211,7 +261,23 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
             # C列 = 价格
             df.iloc[idx, 2] = product_info['价格']
             # D列 = 标准编码
-            df.iloc[idx, 3] = clean_code(code).replace('O', '0').replace('o', '0') if 'O→0' in match_label else clean_code(code)
+            std_code = clean_code(code)
+            if '规则一' in match_label:
+                code_no_dash = std_code.replace('-', '')
+                code_list = list(std_code)
+                non_dash_count = 0
+                for i, c in enumerate(code_list):
+                    if c != '-':
+                        non_dash_count += 1
+                        if non_dash_count == 5 and c == '2':
+                            code_list[i] = '1'
+                            break
+                std_code = ''.join(code_list)
+            elif '规则二' in match_label:
+                std_code = std_code[:-1]
+            elif '规则四' in match_label:
+                std_code = std_code.replace('O', '0').replace('o', '0')
+            df.iloc[idx, 3] = std_code
             # E列 = 原规格编码
             df.iloc[idx, 4] = product_info['原规格编码']
             # F列 = 匹配标注
@@ -219,8 +285,12 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
             if match_label == "直接匹配":
                 direct_match += 1
-            else:
-                o0_match += 1
+            elif match_label == "规则一(2→1)匹配":
+                rule1_match += 1
+            elif match_label == "规则二(去T)匹配":
+                rule2_match += 1
+            elif match_label == "规则四(O→0)匹配":
+                rule4_match += 1
         else:
             df.iloc[idx, 5] = match_label
             no_match += 1
@@ -228,7 +298,9 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     logger.info(f"HT订单处理完成: 共 {total_rows} 行产品")
     logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  O→0转换匹配: {o0_match} 行")
+    logger.info(f"  规则一(2→1)匹配: {rule1_match} 行")
+    logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
+    logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
     logger.info(f"  无匹配: {no_match} 行")
     if no_match_codes:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
