@@ -84,45 +84,47 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
     if not code_clean:
         return None, ''
 
-    # 规则0：直接匹配
+    # ========== 第一层：直接匹配 ==========
     if code_clean in standard_lib:
         return standard_lib[code_clean], "直接匹配"
 
-    # 规则一：第五位1和2互换匹配（双向）
-    code_no_dash = code_clean.replace('-', '')
-    if len(code_no_dash) >= 5 and code_no_dash[4] in ('1', '2'):
+    # ========== 第二层：规则一（第五位1↔2） ==========
+    # 工具函数：第五位1↔2转换
+    def apply_rule1(c):
+        code_no_dash = c.replace('-', '')
+        if len(code_no_dash) < 5 or code_no_dash[4] not in ('1', '2'):
+            return None, None
         fifth_char = code_no_dash[4]
-        # 找到第五个非-字符的位置
-        code_list = list(code_clean)
+        code_list = list(c)
         non_dash_count = 0
         fifth_pos = -1
-        for i, c in enumerate(code_list):
-            if c != '-':
+        for i, ch in enumerate(code_list):
+            if ch != '-':
                 non_dash_count += 1
                 if non_dash_count == 5:
                     fifth_pos = i
                     break
-
         if fifth_pos >= 0:
-            # 1→2 或 2→1 转换
-            if fifth_char == '1':
-                code_list[fifth_pos] = '2'
-                code_converted = ''.join(code_list)
-                if code_converted in standard_lib:
-                    return standard_lib[code_converted], "规则一(1→2)匹配"
-            elif fifth_char == '2':
-                code_list[fifth_pos] = '1'
-                code_converted = ''.join(code_list)
-                if code_converted in standard_lib:
-                    return standard_lib[code_converted], "规则一(2→1)匹配"
+            target_char = '2' if fifth_char == '1' else '1'
+            code_list[fifth_pos] = target_char
+            return ''.join(code_list), f"{fifth_char}→{target_char}"
+        return None, None
 
-    # 规则二：末尾带T时去掉T匹配
+    # 独立规则一
+    c, direction = apply_rule1(code_clean)
+    if c and c in standard_lib:
+        return standard_lib[c], f"规则一({direction})匹配"
+
+    # ========== 第三层：清理规则（规则二、规则三） ==========
+    # 规则二：去T
+    code_no_t = None
     if code_clean.endswith('T'):
         code_no_t = code_clean[:-1]
         if code_no_t in standard_lib:
             return standard_lib[code_no_t], "规则二(去T)匹配"
 
-    # 规则三：包含*号尺寸标记，去掉*及后续直到下一个-
+    # 规则三：去*
+    code_no_star = None
     if '*' in code_clean:
         star_pos = code_clean.find('*')
         next_dash_pos = code_clean.find('-', star_pos)
@@ -133,10 +135,37 @@ def match_code(code: str, standard_lib: Dict[str, Dict]) -> Tuple[Optional[Dict]
         if code_no_star in standard_lib:
             return standard_lib[code_no_star], "规则三(去*)匹配"
 
-    # 规则四：O→0转换匹配
-    code_converted = code_clean.replace('O', '0').replace('o', '0')
-    if code_converted != code_clean and code_converted in standard_lib:
-        return standard_lib[code_converted], "规则四(O→0)匹配"
+    # ========== 第四层：清理 + 规则一（1↔2） ==========
+    # 规则二 + 规则一
+    if code_no_t:
+        c, direction = apply_rule1(code_no_t)
+        if c and c in standard_lib:
+            return standard_lib[c], f"规则二+一(去T,{direction})匹配"
+
+    # 规则三 + 规则一
+    if code_no_star:
+        c, direction = apply_rule1(code_no_star)
+        if c and c in standard_lib:
+            return standard_lib[c], f"规则三+一(去*,{direction})匹配"
+
+    # ========== 第四层：规则四（O→0） ==========
+    code_o0 = code_clean.replace('O', '0').replace('o', '0')
+    if code_o0 != code_clean:
+        # 单独规则四
+        if code_o0 in standard_lib:
+            return standard_lib[code_o0], "规则四(O→0)匹配"
+
+        # 规则四 + 规则二
+        code_o0_no_t = None
+        if code_o0.endswith('T'):
+            code_o0_no_t = code_o0[:-1]
+            if code_o0_no_t in standard_lib:
+                return standard_lib[code_o0_no_t], "规则四+二(O→0,去T)匹配"
+
+            # 规则四 + 规则二 + 规则一
+            c, direction = apply_rule1(code_o0_no_t)
+            if c and c in standard_lib:
+                return standard_lib[c], f"规则四+二+一(O→0,去T,{direction})匹配"
 
     return None, "无匹配"
 
@@ -173,13 +202,15 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     # 统计变量
     total_rows = 0
-    direct_match = 0
-    rule1_2to1_match = 0
-    rule1_1to2_match = 0
-    rule2_match = 0
-    rule3_match = 0
-    rule4_match = 0
-    no_match = 0
+    stats = {
+        "直接匹配": 0,
+        "规则一": 0,
+        "规则二": 0,
+        "规则三": 0,
+        "规则四": 0,
+        "规则组合": 0,
+        "无匹配": 0
+    }
     no_match_codes = []
 
     for idx, row in df.iterrows():
@@ -194,57 +225,29 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
         if product_info:
             # G列 = 价格
             df.iloc[idx, 6] = product_info['价格']
-            # I列 = 标准编码（转换后的）
-            std_code = clean_code(code)
-            if '规则一' in match_label:
-                code_no_dash = std_code.replace('-', '')
-                code_list = list(std_code)
-                non_dash_count = 0
-                fifth_pos = -1
-                for i, c in enumerate(code_list):
-                    if c != '-':
-                        non_dash_count += 1
-                        if non_dash_count == 5:
-                            fifth_pos = i
-                            break
-                if fifth_pos >= 0:
-                    if '2→1' in match_label:
-                        code_list[fifth_pos] = '1'
-                    elif '1→2' in match_label:
-                        code_list[fifth_pos] = '2'
-                    std_code = ''.join(code_list)
-            elif '规则二' in match_label:
-                std_code = std_code[:-1]
-            elif '规则三' in match_label:
-                star_pos = std_code.find('*')
-                next_dash_pos = std_code.find('-', star_pos)
-                if next_dash_pos > star_pos:
-                    std_code = std_code[:star_pos] + std_code[next_dash_pos:]
-                else:
-                    std_code = std_code[:star_pos]
-            elif '规则四' in match_label:
-                std_code = std_code.replace('O', '0').replace('o', '0')
-            df.iloc[idx, 8] = std_code
+            # I列 = 标准编码（从匹配结果中获取）
+            df.iloc[idx, 8] = product_info['规格']
             # J列 = 原规格编码
             df.iloc[idx, 9] = product_info['原规格编码']
             # K列 = 匹配标注
             df.iloc[idx, 10] = match_label
 
-            if match_label == "直接匹配":
-                direct_match += 1
-            elif match_label == "规则一(2→1)匹配":
-                rule1_2to1_match += 1
-            elif match_label == "规则一(1→2)匹配":
-                rule1_1to2_match += 1
-            elif match_label == "规则二(去T)匹配":
-                rule2_match += 1
-            elif match_label == "规则三(去*)匹配":
-                rule3_match += 1
-            elif match_label == "规则四(O→0)匹配":
-                rule4_match += 1
+            # 统计分类
+            if "直接匹配" in match_label:
+                stats["直接匹配"] += 1
+            elif "+" in match_label:
+                stats["规则组合"] += 1
+            elif "规则一" in match_label:
+                stats["规则一"] += 1
+            elif "规则二" in match_label:
+                stats["规则二"] += 1
+            elif "规则三" in match_label:
+                stats["规则三"] += 1
+            elif "规则四" in match_label:
+                stats["规则四"] += 1
         else:
             df.iloc[idx, 10] = match_label
-            no_match += 1
+            stats["无匹配"] += 1
             no_match_codes.append(clean_code(code))
 
         # H列 = 总价 = F列数量 × G列单价
@@ -257,13 +260,13 @@ def process_main_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
                 pass
 
     logger.info(f"主订单处理完成: 共 {total_rows} 行产品")
-    logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  规则一(2→1)匹配: {rule1_2to1_match} 行")
-    logger.info(f"  规则一(1→2)匹配: {rule1_1to2_match} 行")
-    logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
-    logger.info(f"  规则三(去*)匹配: {rule3_match} 行")
-    logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
-    logger.info(f"  无匹配: {no_match} 行")
+    logger.info(f"  直接匹配: {stats['直接匹配']} 行")
+    logger.info(f"  规则一: {stats['规则一']} 行")
+    logger.info(f"  规则二: {stats['规则二']} 行")
+    logger.info(f"  规则三: {stats['规则三']} 行")
+    logger.info(f"  规则四: {stats['规则四']} 行")
+    logger.info(f"  规则组合: {stats['规则组合']} 行")
+    logger.info(f"  无匹配: {stats['无匹配']} 行")
     if no_match_codes:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
 
@@ -286,13 +289,15 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
 
     # 统计变量
     total_rows = 0
-    direct_match = 0
-    rule1_2to1_match = 0
-    rule1_1to2_match = 0
-    rule2_match = 0
-    rule3_match = 0
-    rule4_match = 0
-    no_match = 0
+    stats = {
+        "直接匹配": 0,
+        "规则一": 0,
+        "规则二": 0,
+        "规则三": 0,
+        "规则四": 0,
+        "规则组合": 0,
+        "无匹配": 0
+    }
     no_match_codes = []
 
     for idx, row in df.iterrows():
@@ -307,67 +312,39 @@ def process_ht_order(standard_lib: Dict[str, Dict]) -> pd.DataFrame:
         if product_info:
             # C列 = 价格
             df.iloc[idx, 2] = product_info['价格']
-            # D列 = 标准编码
-            std_code = clean_code(code)
-            if '规则一' in match_label:
-                code_no_dash = std_code.replace('-', '')
-                code_list = list(std_code)
-                non_dash_count = 0
-                fifth_pos = -1
-                for i, c in enumerate(code_list):
-                    if c != '-':
-                        non_dash_count += 1
-                        if non_dash_count == 5:
-                            fifth_pos = i
-                            break
-                if fifth_pos >= 0:
-                    if '2→1' in match_label:
-                        code_list[fifth_pos] = '1'
-                    elif '1→2' in match_label:
-                        code_list[fifth_pos] = '2'
-                    std_code = ''.join(code_list)
-            elif '规则二' in match_label:
-                std_code = std_code[:-1]
-            elif '规则三' in match_label:
-                star_pos = std_code.find('*')
-                next_dash_pos = std_code.find('-', star_pos)
-                if next_dash_pos > star_pos:
-                    std_code = std_code[:star_pos] + std_code[next_dash_pos:]
-                else:
-                    std_code = std_code[:star_pos]
-            elif '规则四' in match_label:
-                std_code = std_code.replace('O', '0').replace('o', '0')
-            df.iloc[idx, 3] = std_code
+            # D列 = 标准编码（从匹配结果中获取）
+            df.iloc[idx, 3] = product_info['规格']
             # E列 = 原规格编码
             df.iloc[idx, 4] = product_info['原规格编码']
             # F列 = 匹配标注
             df.iloc[idx, 5] = match_label
 
-            if match_label == "直接匹配":
-                direct_match += 1
-            elif match_label == "规则一(2→1)匹配":
-                rule1_2to1_match += 1
-            elif match_label == "规则一(1→2)匹配":
-                rule1_1to2_match += 1
-            elif match_label == "规则二(去T)匹配":
-                rule2_match += 1
-            elif match_label == "规则三(去*)匹配":
-                rule3_match += 1
-            elif match_label == "规则四(O→0)匹配":
-                rule4_match += 1
+            # 统计分类
+            if "直接匹配" in match_label:
+                stats["直接匹配"] += 1
+            elif "+" in match_label:
+                stats["规则组合"] += 1
+            elif "规则一" in match_label:
+                stats["规则一"] += 1
+            elif "规则二" in match_label:
+                stats["规则二"] += 1
+            elif "规则三" in match_label:
+                stats["规则三"] += 1
+            elif "规则四" in match_label:
+                stats["规则四"] += 1
         else:
             df.iloc[idx, 5] = match_label
-            no_match += 1
+            stats["无匹配"] += 1
             no_match_codes.append(clean_code(code))
 
     logger.info(f"HT订单处理完成: 共 {total_rows} 行产品")
-    logger.info(f"  直接匹配: {direct_match} 行")
-    logger.info(f"  规则一(2→1)匹配: {rule1_2to1_match} 行")
-    logger.info(f"  规则一(1→2)匹配: {rule1_1to2_match} 行")
-    logger.info(f"  规则二(去T)匹配: {rule2_match} 行")
-    logger.info(f"  规则三(去*)匹配: {rule3_match} 行")
-    logger.info(f"  规则四(O→0)匹配: {rule4_match} 行")
-    logger.info(f"  无匹配: {no_match} 行")
+    logger.info(f"  直接匹配: {stats['直接匹配']} 行")
+    logger.info(f"  规则一: {stats['规则一']} 行")
+    logger.info(f"  规则二: {stats['规则二']} 行")
+    logger.info(f"  规则三: {stats['规则三']} 行")
+    logger.info(f"  规则四: {stats['规则四']} 行")
+    logger.info(f"  规则组合: {stats['规则组合']} 行")
+    logger.info(f"  无匹配: {stats['无匹配']} 行")
     if no_match_codes:
         logger.info(f"  无匹配编码列表: {no_match_codes}")
 
