@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+
+{% block title %}更新标准库 - 产品报价系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>更新标准产品库</h1>
+
+    <div class="alert alert-info">
+        <strong>说明:</strong> 上传已填写价格的报价结果Excel文件，系统将自动识别"无匹配"
+        且填写了价格的产品，添加到标准库中。
+    </div>
+
+    {% if not preview %}
+    <form id="uploadForm" method="POST" action="{{ url_for('upload_for_update') }}" enctype="multipart/form-data">
+        <div class="drop-zone" id="dropZone">
+            <div class="drop-zone-icon">📤</div>
+            <p>拖拽报价结果文件到此处，或点击选择</p>
+            <p style="font-size: 0.875rem; color: #718096; margin-top: 0.5rem;">
+                支持 .xlsx, .xls, .csv 格式
+            </p>
+            <input type="file" name="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display: none;">
+        </div>
+    </form>
+    {% else %}
+    <div class="alert alert-info">
+        <strong>文件已上传:</strong> {{ filename }}
+    </div>
+
+    <h2>数据预览（前10行）</h2>
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    {% for header in headers %}
+                    <th>{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in preview_data %}
+                <tr>
+                    {% for cell in row %}
+                    <td>{{ cell if cell is not none else '' }}</td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <h2>选择列</h2>
+    <form id="processForm" method="POST" action="{{ url_for('process_update') }}">
+        <input type="hidden" name="job_id" value="{{ job_id }}">
+        <input type="hidden" name="filename" value="{{ filename }}">
+
+        <div class="form-group">
+            <label>产品编码列</label>
+            <select name="code_col" required>
+                {% for col in columns %}
+                <option value="{{ col }}">列 {{ col }} (A=0, B=1, C=2...)</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>价格列</label>
+            <select name="price_col" required>
+                {% for col in columns %}
+                <option value="{{ col }}">列 {{ col }} (A=0, B=1, C=2...)</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>匹配标注列（含"无匹配"字样的列）</label>
+            <select name="label_col" required>
+                {% for col in columns %}
+                <option value="{{ col }}">列 {{ col }} (A=0, B=1, C=2...)</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <button type="submit" class="btn btn-success">更新标准库</button>
+    </form>
+    {% endif %}
+</div>
+
+<script>
+{% if not preview %}
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const uploadForm = document.getElementById('uploadForm');
+
+dropZone.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+        uploadForm.submit();
+    }
+});
+
+dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+});
+
+dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+});
+
+dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+
+    if (e.dataTransfer.files.length > 0) {
+        fileInput.files = e.dataTransfer.files;
+        uploadForm.submit();
+    }
+});
+{% endif %}
+</script>
+{% endblock %}

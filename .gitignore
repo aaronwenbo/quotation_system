@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Runtime data
+storage/
+feedback/
+order/
+output/
+logs/
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+
+# Dev config
+.claude/
+.worktrees/
+.agents/
+
+# Legacy data on disk
+src/
+docs/
+production/
