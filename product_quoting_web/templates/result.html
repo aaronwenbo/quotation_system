@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}报价结果 - 产品报价系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>报价处理完成</h1>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total }}</div>
+            <div class="stat-label">总行数</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.total - stats.no_match }}</div>
+            <div class="stat-label">匹配成功</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ "%.1f%%"|format((stats.total - stats.no_match)/stats.total*100 if stats.total > 0 else 0) }}</div>
+            <div class="stat-label">匹配率</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number">{{ stats.no_match }}</div>
+            <div class="stat-label">未匹配</div>
+        </div>
+    </div>
+
+    <h2>匹配明细</h2>
+    <table class="preview-table">
+        <thead>
+            <tr>
+                <th>匹配类型</th>
+                <th>数量</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>直接匹配</td><td>{{ stats.direct_match }}</td></tr>
+            <tr><td>规则一 (1↔2)</td><td>{{ stats.rule1_match }}</td></tr>
+            <tr><td>规则二 (去T)</td><td>{{ stats.rule2_match }}</td></tr>
+            <tr><td>规则三 (去*)</td><td>{{ stats.rule3_match }}</td></tr>
+            <tr><td>规则四 (O→0)</td><td>{{ stats.rule4_match }}</td></tr>
+            <tr><td>规则五 (前缀映射)</td><td>{{ stats.rule5_match }}</td></tr>
+            <tr><td>规则组合</td><td>{{ stats.rule_combination }}</td></tr>
+            <tr><td>无匹配</td><td>{{ stats.no_match }}</td></tr>
+        </tbody>
+    </table>
+
+    {% if no_match_codes %}
+    <h2 style="margin-top: 2rem;" class="collapsible" onclick="toggleCollapsible()">
+        未匹配编码列表 ({{ no_match_codes|length }}个) ▼
+    </h2>
+    <div class="collapsible-content" id="collapsibleContent">
+        <div class="code-list">
+            {% for code in no_match_codes %}
+            <div class="code-list-item">{{ code }}</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="actions">
+        <a href="{{ url_for('download_result', filename=result_filename) }}" class="btn btn-primary">
+            📥 下载报价结果
+        </a>
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">
+            继续报价
+        </a>
+    </div>
+
+    <div class="alert alert-info" style="margin-top: 2rem;">
+        <strong>提示:</strong> 下载文件后，手动填写未匹配产品的价格，然后在"更新标准库"页面上传，
+        即可将这些新的产品编码和价格添加到标准库中，下次自动匹配。
+    </div>
+</div>
+
+<script>
+function toggleCollapsible() {
+    const content = document.getElementById('collapsibleContent');
+    content.classList.toggle('show');
+}
+</script>
+{% endblock %}

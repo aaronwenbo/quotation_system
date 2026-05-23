@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}更新结果 - 产品报价系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>标准库更新完成</h1>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ added_count }}</div>
+            <div class="stat-label">新增产品</div>
+        </div>
+        <div class="stat-card" style="background: #718096;">
+            <div class="stat-number">{{ skipped_count }}</div>
+            <div class="stat-label">跳过（已存在）</div>
+        </div>
+    </div>
+
+    {% if added %}
+    <h2>新增的产品编码</h2>
+    <table class="preview-table">
+        <thead>
+            <tr>
+                <th>原始编码</th>
+                <th>标准编码</th>
+                <th>价格</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in added %}
+            <tr>
+                <td>{{ item.original }}</td>
+                <td>{{ item.std }}</td>
+                <td>{{ item.price }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if skipped %}
+    <h2 style="margin-top: 1.5rem;" class="collapsible" onclick="toggleSkipped()">
+        跳过的编码（已存在） ({{ skipped|length }}个) ▼
+    </h2>
+    <div class="collapsible-content" id="skippedContent">
+        <table class="preview-table">
+            <thead>
+                <tr>
+                    <th>原始编码</th>
+                    <th>标准编码</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in skipped %}
+                <tr>
+                    <td>{{ item.original }}</td>
+                    <td>{{ item.std }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <div class="actions">
+        <a href="{{ url_for('update_library') }}" class="btn btn-secondary">继续更新</a>
+        <a href="{{ url_for('library_status') }}" class="btn btn-primary">查看标准库状态</a>
+    </div>
+
+    <div class="alert alert-info" style="margin-top: 2rem;">
+        <strong>提示:</strong> 更新前已自动备份标准库。备份文件保存在 storage/backup/ 目录中，
+        保留最近5个版本。
+    </div>
+</div>
+
+<script>
+function toggleSkipped() {
+    const content = document.getElementById('skippedContent');
+    content.classList.toggle('show');
+}
+</script>
+{% endblock %}

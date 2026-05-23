@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}标准库状态 - 产品报价系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>标准产品库状态</h1>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number">{{ total_codes }}</div>
+            <div class="stat-label">产品编码总数</div>
+        </div>
+    </div>
+
+    <h2>快速操作</h2>
+    <div class="actions">
+        <a href="{{ url_for('index') }}" class="btn btn-primary">开始报价</a>
+        <a href="{{ url_for('update_library') }}" class="btn btn-success">更新标准库</a>
+        <form method="POST" action="{{ url_for('backup_library') }}" style="display: inline;">
+            <button type="submit" class="btn btn-warning" onclick="return confirm('确定要备份标准库吗？')">
+                💾 备份标准库
+            </button>
+        </form>
+    </div>
+
+    <h2>历史备份</h2>
+    {% if backups %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>序号</th>
+                    <th>备份时间</th>
+                    <th>文件大小</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for backup in backups %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ backup.formatted_date }}</td>
+                    <td>{{ backup.size }} KB</td>
+                    <td>
+                        <a href="{{ url_for('download_backup', filename=backup.filename) }}"
+                           class="btn btn-sm btn-primary" target="_blank">
+                            📥 下载
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        暂无备份文件，点击上方"备份标准库"按钮创建第一个备份。
+    </div>
+    {% endif %}
+
+    <h2>更新日志</h2>
+    {% if update_logs %}
+    <div class="table-container">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>序号</th>
+                    <th>加入时间</th>
+                    <th>标准编码</th>
+                    <th>原始编码</th>
+                    <th>价格</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in update_logs %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ log.get('加入时间', '') }}</td>
+                    <td><code>{{ log.get('标准编码', '') }}</code></td>
+                    <td>{{ log.get('原始编码', '') }}</td>
+                    <td>¥{{ "%.4f"|format(log.get('价格', 0)) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="alert alert-info">
+        暂无更新记录，更新标准库后将在此显示详细记录。
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

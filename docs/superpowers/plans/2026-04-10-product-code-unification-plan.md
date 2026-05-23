@@ -1,3 +1,38 @@
+# 产品编码统一合并工具实现计划
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** 实现产品编码统一合并工具，合并两份来源不同的报价文件，生成统一产品库、完整编码映射表和更新后的库存文件，并输出详细统计信息。
+
+**Architecture:** 采用模块化设计，将清理、匹配、合并、输出分离为不同函数，遵循单一职责原则。先自动处理，对需要人工匹配的导出映射模板，用户填写后再应用映射完成合并。
+
+**Tech Stack:** Python 3, pandas, openpyxl, logging（遵循项目已有日志规范）
+
+---
+
+## 文件结构
+
+| 文件 | 职责 |
+|------|------|
+| `unify_products.py` | 主程序入口， orchestrate 整个流程 |
+| `docs/superpowers/specs/2026-04-10-product-code-unification-design.md` | 设计文档（已完成） |
+| `output/product_unified.xlsx` | 输出：统一产品库 |
+| `output/product_unified.csv` | 输出：统一产品库CSV版本 |
+| `output/code_mapping.xlsx` | 输出：完整编码映射表 |
+| `output/code_mapping_template.xlsx` | 输出：待人工匹配的映射模板（如果有） |
+| `output/initial_stock_updated.xlsx` | 输出：更新后的库存文件 |
+| `unify_products.log` | 输出：详细处理日志 |
+
+---
+
+### Task 1: 创建主程序框架和日志配置
+
+**Files:**
+- Create: `unify_products.py`
+
+- [ ] **Step 1: 创建文件，添加 shebang、文档字符串和日志配置**
+
+```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -8,7 +43,7 @@
 import pandas as pd
 import logging
 import os
-from typing import Dict, List, Tuple, Optional, Any
+from typing import Dict, List, Tuple, Optional
 
 # 配置日志系统
 logging.basicConfig(
@@ -20,17 +55,47 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+```
 
+- [ ] **Step 2: 创建输出目录**
+
+Add after imports:
+```python
 # 确保输出目录存在
 OUTPUT_DIR = 'output'
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+```
 
+- [ ] **Step 3: 验证代码可运行**
 
-def clean_product_code(code: Optional[Any]) -> str:
+Run: `python3 unify_products.py`
+Expected: 无错误退出（还没有主逻辑）
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add unify_products.py
+git commit -m "feat: create main program framework with logging config"
+```
+
+---
+
+### Task 2: 实现产品编码清理函数
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加 clean_product_code 函数**
+
+Add after OUTPUT_DIR definition:
+
+```python
+def clean_product_code(code) -> str:
     """
     清理产品编码，统一格式：
     - 去除所有空格
-    - 去除首尾空白字符
+    - 去除首尾特殊字符
+    - 统一分隔符格式
 
     Args:
         code: 原始产品编码（任意类型）
@@ -39,7 +104,6 @@ def clean_product_code(code: Optional[Any]) -> str:
         清理后的编码字符串
     """
     if pd.isna(code):
-        logger.debug(f"输入产品编码为NaN，返回空字符串")
         return ""
 
     code_str = str(code)
@@ -47,12 +111,66 @@ def clean_product_code(code: Optional[Any]) -> str:
     code_str = code_str.replace(" ", "").strip()
     # 如果为空，返回空字符串
     if not code_str:
-        logger.debug(f"清理后的产品编码为空，输入值: {code}")
         return ""
 
     return code_str
+```
 
+- [ ] **Step 2: 简单测试函数**
 
+Add to if `__name__ == '__main__'` block:
+
+```python
+if __name__ == '__main__':
+    # 测试清理函数
+    test_cases = [
+        " 26711 -04-04 ",
+        "26711-04-04",
+        "00110 03",
+    ]
+    for test in test_cases:
+        result = clean_product_code(test)
+        logger.info(f"Input: '{test}' -> Output: '{result}'")
+```
+
+- [ ] **Step 3: 运行测试验证**
+
+Run: `python3 unify_products.py`
+Expected:
+```
+... - INFO - Input: ' 26711 -04-04 ' -> Output: '26711-04-04'
+... - INFO - Input: '26711-04-04' -> Output: '26711-04-04'
+... - INFO - Input: '00110 03' -> Output: '0011003'
+```
+
+- [ ] **Step 4: 移除测试代码，保持入口函数干净**
+
+Update `__name__ == '__main__'` to:
+```python
+if __name__ == '__main__':
+    # 这里后续放主逻辑
+    pass
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add unify_products.py
+git commit -m "feat: implement clean_product_code function"
+```
+
+---
+
+### Task 3: 实现读取两份报价文件的函数
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加 read_quote_file 函数**
+
+Add after `clean_product_code`:
+
+```python
 def read_quote_file(file_path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
     """
     读取报价文件，提取产品编码和相关信息，同时清理编码
@@ -117,8 +235,45 @@ def read_quote_file(file_path: str) -> Tuple[pd.DataFrame, Dict[str, str]]:
     except Exception as e:
         logger.error(f"读取报价文件失败: {str(e)}", exc_info=True)
         raise
+```
 
+- [ ] **Step 2: 添加测试到主入口**
 
+```python
+if __name__ == '__main__':
+    # 测试读取文件
+    file1_path = 'data/product_import_template.xlsx'
+    df1, map1 = read_quote_file(file1_path)
+    logger.info(f"文件1读取完成: {len(df1)} 条数据")
+    print(df1.head())
+```
+
+- [ ] **Step 3: 运行测试验证**
+
+Run: `python3 unify_products.py`
+Expected: 成功读取，输出前几行数据
+
+- [ ] **Step 4: 移除测试代码**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add unify_products.py
+git commit -m "feat: implement read_quote_file function"
+```
+
+---
+
+### Task 4: 实现自动匹配合并逻辑
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加 match_and_merge 函数**
+
+Add after `read_quote_file`:
+
+```python
 def match_and_merge(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     基于清理后的编码自动匹配合并两份数据
@@ -133,24 +288,6 @@ def match_and_merge(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame,
             pending_df: 需要人工匹配的数据
     """
     logger.info("开始自动匹配合并...")
-
-    #  deduplicate df1 by cleaned_code
-    if df1['cleaned_code'].duplicated().any():
-        duplicate_codes_df1 = df1[df1['cleaned_code'].duplicated(keep=False)]['cleaned_code'].value_counts()
-        duplicate_count_df1 = len(duplicate_codes_df1)
-        duplicate_codes_list_df1 = list(duplicate_codes_df1.index)
-        logger.warning(f"文件1中发现 {duplicate_count_df1} 个重复的清理后编码，重复编码: {duplicate_codes_list_df1}")
-        logger.warning(f"文件1去重前记录数: {len(df1)}, 去重后记录数: {df1['cleaned_code'].nunique()}")
-        df1 = df1.drop_duplicates(subset=['cleaned_code'], keep='first')
-
-    #  deduplicate df2 by cleaned_code
-    if df2['cleaned_code'].duplicated().any():
-        duplicate_codes_df2 = df2[df2['cleaned_code'].duplicated(keep=False)]['cleaned_code'].value_counts()
-        duplicate_count_df2 = len(duplicate_codes_df2)
-        duplicate_codes_list_df2 = list(duplicate_codes_df2.index)
-        logger.warning(f"文件2中发现 {duplicate_count_df2} 个重复的清理后编码，重复编码: {duplicate_codes_list_df2}")
-        logger.warning(f"文件2去重前记录数: {len(df2)}, 去重后记录数: {df2['cleaned_code'].nunique()}")
-        df2 = df2.drop_duplicates(subset=['cleaned_code'], keep='first')
 
     # 获取所有清理后的编码集合
     codes1 = set(df1['cleaned_code'])
@@ -240,8 +377,50 @@ def match_and_merge(df1: pd.DataFrame, df2: pd.DataFrame) -> Tuple[pd.DataFrame,
     pending_df = pd.DataFrame(pending_data)
 
     return merged_df, pending_df
+```
 
+- [ ] **Step 2: 添加测试**
 
+```python
+if __name__ == '__main__':
+    # 测试读取和匹配
+    file1_path = 'data/product_import_template.xlsx'
+    file2_path = 'data/product_import_template_neixian.xlsx'
+
+    df1, _ = read_quote_file(file1_path)
+    df2, _ = read_quote_file(file2_path)
+
+    merged_df, pending_df = match_and_merge(df1, df2)
+    logger.info(f"合并完成: {len(merged_df)} 合并, {len(pending_df)} 待匹配")
+    print(merged_df['source'].value_counts())
+```
+
+- [ ] **Step 3: 运行测试**
+
+Run: `python3 unify_products.py`
+Expected: 输出统计信息和各source分类计数
+
+- [ ] **Step 4: 移除测试代码**
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add unify_products.py
+git commit -m "feat: implement auto match and merge logic"
+```
+
+---
+
+### Task 5: 实现导出映射模板和读取用户映射函数
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加导出映射模板函数**
+
+Add after `match_and_merge`:
+
+```python
 def export_pending_mapping(pending_df: pd.DataFrame, output_path: str) -> None:
     """
     导出需要人工匹配的模板
@@ -256,30 +435,26 @@ def export_pending_mapping(pending_df: pd.DataFrame, output_path: str) -> None:
 
     logger.info(f"导出 {len(pending_df)} 条待人工匹配记录到: {output_path}")
 
-    # 确保输出目录存在
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
     # 创建模板：用户需要填写 final_unified_code
     template_data = []
     for idx, row in pending_df.iterrows():
         template_data.append({
             'original_code_1': row['original_code_1'],
             'original_code_2': row['original_code_2'],
-            'spec_1': row['spec'] if 'spec' in row else None,
-            'spec_2': None,
+            'spec_1': row['spec_1'] if 'spec_1' in row else None,
+            'spec_2': row['spec_2'] if 'spec_2' in row else None,
             'final_unified_code': "",  # 用户填写
             'note': "",  # 用户备注
         })
 
     template_df = pd.DataFrame(template_data)
-    try:
-        template_df.to_excel(output_path, index=False)
-        logger.info("映射模板导出完成，请填写后重新运行程序")
-    except Exception as e:
-        logger.error(f"导出待匹配模板失败: {str(e)}", exc_info=True)
-        raise
+    template_df.to_excel(output_path, index=False)
+    logger.info("映射模板导出完成，请填写后重新运行程序")
+```
 
+- [ ] **Step 2: 添加读取用户映射函数**
 
+```python
 def read_user_mapping(mapping_file: str) -> Dict[str, str]:
     """
     读取用户填写完成的映射表
@@ -295,11 +470,7 @@ def read_user_mapping(mapping_file: str) -> Dict[str, str]:
         return {}
 
     logger.info(f"读取用户映射文件: {mapping_file}")
-    try:
-        df = pd.read_excel(mapping_file, header=0)
-    except Exception as e:
-        logger.error(f"读取用户映射文件失败: {str(e)}", exc_info=True)
-        return {}
+    df = pd.read_excel(mapping_file, header=0)
 
     mapping: Dict[str, str] = {}
     filled_count = 0
@@ -323,13 +494,32 @@ def read_user_mapping(mapping_file: str) -> Dict[str, str]:
 
     logger.info(f"读取到 {filled_count} 条有效映射")
     return mapping
+```
 
+- [ ] **Step 3: Commit**
 
+```bash
+git add unify_products.py
+git commit -m "feat: add export pending mapping and read user mapping functions"
+```
+
+---
+
+### Task 6: 生成最终统一产品库和完整映射表
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加构建最终输出函数**
+
+Add after `read_user_mapping`:
+
+```python
 def build_final_products(
     auto_merged_df: pd.DataFrame,
     user_mapping: Dict[str, str],
-    df1_original: pd.DataFrame,  # 保留参数供未来扩展使用
-    df2_original: pd.DataFrame   # 保留参数供未来扩展使用
+    df1_original: pd.DataFrame,
+    df2_original: pd.DataFrame
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     应用用户映射，构建最终统一产品库和完整映射表
@@ -374,9 +564,6 @@ def build_final_products(
                 'category': row['category'],
                 'source': row['source'],
             }
-            # 检查是否覆盖已存在的最终编码
-            if final_code in final_products:
-                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file1={row['original_code_1']}, file2={row['original_code_2']}")
             final_products[final_code] = product
 
             # 添加映射记录
@@ -384,13 +571,13 @@ def build_final_products(
                 'source_file': 'file1',
                 'original_code': row['original_code_1'],
                 'unified_code': final_code,
-                'needs_manual_mapping': row['original_code_1'] in user_mapping,
+                'needs_manual_mapping': False,
             })
             full_mapping.append({
                 'source_file': 'file2',
                 'original_code': row['original_code_2'],
                 'unified_code': final_code,
-                'needs_manual_mapping': row['original_code_2'] in user_mapping,
+                'needs_manual_mapping': False,
             })
 
         elif row['source'] == 'file1_only':
@@ -410,9 +597,6 @@ def build_final_products(
                 'category': row['category'],
                 'source': row['source'],
             }
-            # 检查是否覆盖已存在的最终编码
-            if final_code in final_products:
-                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file1={orig_code}")
             final_products[final_code] = product
 
             full_mapping.append({
@@ -439,9 +623,6 @@ def build_final_products(
                 'category': row['category'],
                 'source': row['source'],
             }
-            # 检查是否覆盖已存在的最终编码
-            if final_code in final_products:
-                logger.info(f"覆盖已存在的最终编码 '{final_code}'，原始编码: file2={orig_code}")
             final_products[final_code] = product
 
             full_mapping.append({
@@ -462,8 +643,27 @@ def build_final_products(
     logger.info(f"完整映射表共 {len(mapping_df)} 条记录")
 
     return final_df, mapping_df
+```
 
+- [ ] **Step 2: Commit**
 
+```bash
+git add unify_products.py
+git commit -m "feat: implement build final products and full mapping"
+```
+
+---
+
+### Task 7: 实现更新库存文件
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加更新库存函数**
+
+Add after `build_final_products`:
+
+```python
 def update_stock_codes(
     stock_file_path: str,
     full_mapping: pd.DataFrame
@@ -480,26 +680,14 @@ def update_stock_codes(
     """
     logger.info(f"读取原始库存文件: {stock_file_path}")
 
-    try:
-        # 读取库存文件
-        df_stock = pd.read_excel(stock_file_path, sheet_name=0, header=0)
-        logger.info(f"原始库存共 {len(df_stock)} 行")
-    except Exception as e:
-        logger.error(f"读取库存文件失败: {str(e)}", exc_info=True)
-        raise
+    # 读取库存文件
+    df_stock = pd.read_excel(stock_file_path, sheet_name=0, header=0)
+    logger.info(f"原始库存共 {len(df_stock)} 行")
 
-    # 检查产品编码*列是否存在
-    product_code_col = '产品编码*'
-    if product_code_col not in df_stock.columns:
-        logger.error(f"库存文件中缺少必要的 '{product_code_col}' 列。"
-                     f"文件中的列名包括: {list(df_stock.columns)}")
-        raise ValueError(f"库存文件缺少必要的 '{product_code_col}' 列")
-
-    # 构建映射字典 original_code -> unified_code (使用 pandas zip 优化)
-    mapping_dict: Dict[str, str] = dict(zip(
-        full_mapping['original_code'].astype(str),
-        full_mapping['unified_code'].astype(str)
-    ))
+    # 构建映射字典 original_code -> unified_code
+    mapping_dict: Dict[str, str] = {}
+    for idx, row in full_mapping.iterrows():
+        mapping_dict[str(row['original_code'])] = str(row['unified_code'])
 
     logger.info(f"构建了 {len(mapping_dict)} 条编码映射关系")
 
@@ -542,8 +730,27 @@ def update_stock_codes(
             logger.warning(f"... 共 {len(not_found_codes)} 个未找到")
 
     return df_stock
+```
 
+- [ ] **Step 2: Commit**
 
+```bash
+git add unify_products.py
+git commit -m "feat: implement stock code update function"
+```
+
+---
+
+### Task 8: 实现保存所有输出文件和主入口流程
+
+**Files:**
+- Modify: `unify_products.py`
+
+- [ ] **Step 1: 添加保存输出函数和主流程**
+
+Add at end of file before `if __name__ == '__main__'`:
+
+```python
 def save_outputs(
     final_products: pd.DataFrame,
     full_mapping: pd.DataFrame,
@@ -583,8 +790,13 @@ def save_outputs(
         template_xlsx = os.path.join(OUTPUT_DIR, 'mapping_template.xlsx')
         pending_template.to_excel(template_xlsx, index=False)
         logger.info(f"待人工匹配模板已保存: {template_xlsx}")
+```
 
+- [ ] **Step 2: 实现主入口函数**
 
+Replace `if __name__ == '__main__':` with:
+
+```python
 def main():
     """
     主流程：
@@ -655,3 +867,26 @@ def main():
 
 if __name__ == '__main__':
     main()
+```
+
+- [ ] **Step 3: 运行程序验证整体流程**
+
+Run: `python3 unify_products.py`
+Expected: 程序正常运行，生成输出文件，输出统计信息
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add unify_products.py
+git commit -m "feat: implement save outputs and main entry flow"
+```
+
+---
+
+## 自检查
+
+- [x] 所有规范都在设计文档中，每个需求对应实现任务
+- [x] 没有占位符，所有代码都完整
+- [x] 函数命名一致，类型标注完整
+- [x] 遵循中文注释规范，日志系统完备
+
