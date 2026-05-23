@@ -179,6 +179,8 @@ def process_quote():
     filename = request.form.get('filename')
     code_col = int(request.form.get('code_col'))
     qty_col = int(request.form.get('qty_col'))
+    use_markup = request.form.get('use_markup') == 'on'
+    markup_percent = float(request.form.get('markup_percent', 0) or 0) if use_markup else 0
 
     file_path = UPLOAD_DIR / filename
     if not file_path.exists():
@@ -186,7 +188,8 @@ def process_quote():
         return redirect(url_for('index'))
 
     try:
-        df, stats, no_match_codes = quoting_service.process_quote(str(file_path), code_col, qty_col)
+        df, stats, no_match_codes = quoting_service.process_quote(
+            str(file_path), code_col, qty_col, markup_percent)
 
         result_filename = f"{job_id}-result.xlsx"
         result_path = RESULT_DIR / result_filename

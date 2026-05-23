@@ -124,7 +124,8 @@ class QuotingService:
         except (ValueError, TypeError):
             return None, f"第{0}行数量无法识别为数字: '{original}'"  # 行号由调用方填充
 
-    def process_quote(self, file_path: str, code_col: int, qty_col: int) -> Tuple[pd.DataFrame, Dict, List[str]]:
+    def process_quote(self, file_path: str, code_col: int, qty_col: int,
+                      markup_percent: float = 0) -> Tuple[pd.DataFrame, Dict, List[str]]:
         """
         处理订单报价
 
@@ -132,6 +133,7 @@ class QuotingService:
             file_path: 订单文件路径
             code_col: 产品编码列号 (A=0, B=1...)
             qty_col: 数量列号
+            markup_percent: 价格上浮百分比，0表示不上浮
 
         Returns:
             (结果DataFrame, 统计字典, 未匹配编码列表)
@@ -175,12 +177,20 @@ class QuotingService:
                     df[len(df.columns)] = None
 
             if product_info:
-                df.iloc[idx, price_col_idx] = product_info['价格']
+                # 计算单价（应用上浮）
+                unit_price = float(product_info['价格'])
+                if markup_percent > 0:
+                    unit_price = round(unit_price * (1 + markup_percent / 100), 2)
+                else:
+                    unit_price = round(unit_price, 2)
+                df.iloc[idx, price_col_idx] = unit_price
+
                 qty_raw = row.iloc[qty_col] if qty_col < len(row) else None
                 if pd.notna(qty_raw):
                     qty, warning = self._parse_quantity(qty_raw)
                     if qty is not None:
-                        df.iloc[idx, total_price_col_idx] = qty * float(product_info['价格'])
+                        total = round(qty * unit_price, 2)
+                        df.iloc[idx, total_price_col_idx] = total
                     if warning:
                         # 填充行号
                         excel_row = idx + 1  # DataFrame 0-based → Excel 1-based

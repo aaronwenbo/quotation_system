@@ -51,7 +51,7 @@ OUTPUT_DIR = str(BASE_DIR / 'output')
 LOG_DIR = str(BASE_DIR / 'logs')
 
 
-def quote_order(file_path: str, code_col: int, qty_col: int) -> None:
+def quote_order(file_path: str, code_col: int, qty_col: int, markup: float = 0) -> None:
     """
     对订单文件进行报价 - 调用统一核心库
 
@@ -59,6 +59,7 @@ def quote_order(file_path: str, code_col: int, qty_col: int) -> None:
         file_path: 订单文件路径
         code_col: 产品编码列号 (0开始, A=0, B=1...)
         qty_col: 数量列号
+        markup: 价格上浮百分比，0表示不上浮
     """
     separator = '=' * 60
     logger.info(separator)
@@ -66,9 +67,11 @@ def quote_order(file_path: str, code_col: int, qty_col: int) -> None:
     logger.info(separator)
     logger.info(f"产品编码列: 第{code_col}列 ({chr(ord('A')+code_col)})")
     logger.info(f"数量列: 第{qty_col}列 ({chr(ord('A')+qty_col)})")
+    if markup > 0:
+        logger.info(f"价格上浮: {markup}%")
 
     service = QuotingService(STANDARD_LIB_PATH, MATCHING_RULES_PATH, LOG_DIR)
-    df, stats, no_match_codes = service.process_quote(file_path, code_col, qty_col)
+    df, stats, no_match_codes = service.process_quote(file_path, code_col, qty_col, markup)
 
     # 输出统计
     matched = stats['total'] - stats['no_match']
@@ -164,6 +167,9 @@ def print_usage():
     print("   示例 - 接头询价 (B列=产品, C列=数量):")
     print("   python quoting_skill.py quote ../order/接头询价\\(4.xls 1 2")
     print()
+    print("   示例 - 带上浮10%报价 (B列=产品, C列=数量):")
+    print("   python quoting_skill.py quote ../order/接头询价\\(4.xls 1 2 --markup 10")
+    print()
     print("   示例 - 天一询价单 (B列=产品, D列=数量):")
     print("   python quoting_skill.py quote ../order/天一询价2026.04.22.xlsx 1 3")
     print()
@@ -187,13 +193,22 @@ def main():
 
     if command == 'quote':
         if len(sys.argv) < 5:
-            print("错误: quote 命令需要 3 个参数: <文件路径> <产品列号> <数量列号>")
+            print("错误: quote 命令需要 3 个参数: <文件路径> <产品列号> <数量列号> [--markup <百分比>]")
             print_usage()
             return
         file_path = sys.argv[2]
         code_col = int(sys.argv[3])
         qty_col = int(sys.argv[4])
-        quote_order(file_path, code_col, qty_col)
+        markup = 0.0
+        # 解析可选参数 --markup
+        for i, arg in enumerate(sys.argv):
+            if arg == '--markup' and i + 1 < len(sys.argv):
+                try:
+                    markup = float(sys.argv[i + 1])
+                except ValueError:
+                    print(f"错误: 上浮百分比无效: {sys.argv[i + 1]}")
+                    return
+        quote_order(file_path, code_col, qty_col, markup)
 
     elif command == 'update':
         if len(sys.argv) < 6:
