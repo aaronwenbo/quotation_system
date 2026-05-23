@@ -196,6 +196,7 @@ def process_quote():
         return render_template('result.html',
                               stats=stats,
                               no_match_codes=no_match_codes,
+                              qty_warnings=stats.get('qty_warnings', []),
                               result_filename=result_filename)
     except Exception as e:
         flash(f'处理失败: {str(e)}', 'error')

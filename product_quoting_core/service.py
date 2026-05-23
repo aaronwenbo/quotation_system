@@ -88,6 +88,42 @@ class QuotingService:
         # 转换为字典列表，最多返回limit条
         return df.head(limit).to_dict('records')
 
+    def _parse_quantity(self, raw_value) -> Tuple[Optional[float], Optional[str]]:
+        """
+        将数量列的值转换为数字
+
+        支持格式：纯数字、千分位逗号、中文单位（个/台/套/只/件/支/米/卷）、空格
+        若无法解析则返回 None 和警告信息
+
+        Returns:
+            (数字值或None, 警告信息或None)
+        """
+        if raw_value is None:
+            return None, None
+
+        # 转为字符串处理
+        s = str(raw_value).strip()
+        if not s or s.lower() == 'nan':
+            return None, None
+
+        # 记录原始值用于警告
+        original = s
+
+        # 去掉常见中文单位
+        units = ['个', '台', '套', '只', '件', '支', '米', '卷', '箱', '包', '桶', '瓶', '张', '根', '对', '付', '条', '片', '块', '把']
+        for unit in units:
+            if s.endswith(unit):
+                s = s[:-1].strip()
+                break
+
+        # 去掉千分位逗号（1,234 → 1234）
+        s = s.replace(',', '')
+
+        try:
+            return float(s), None
+        except (ValueError, TypeError):
+            return None, f"第{0}行数量无法识别为数字: '{original}'"  # 行号由调用方填充
+
     def process_quote(self, file_path: str, code_col: int, qty_col: int) -> Tuple[pd.DataFrame, Dict, List[str]]:
         """
         处理订单报价
@@ -117,6 +153,7 @@ class QuotingService:
             'no_match': 0
         }
         no_match_codes = []
+        qty_warnings = []  # 数量列无法解析的警告列表
 
         for idx, row in df.iterrows():
             code = row.iloc[code_col] if code_col < len(row) else None
@@ -139,12 +176,17 @@ class QuotingService:
 
             if product_info:
                 df.iloc[idx, price_col_idx] = product_info['价格']
-                qty = row.iloc[qty_col] if qty_col < len(row) else None
-                if pd.notna(qty):
-                    try:
-                        df.iloc[idx, total_price_col_idx] = float(qty) * float(product_info['价格'])
-                    except (ValueError, TypeError):
-                        pass
+                qty_raw = row.iloc[qty_col] if qty_col < len(row) else None
+                if pd.notna(qty_raw):
+                    qty, warning = self._parse_quantity(qty_raw)
+                    if qty is not None:
+                        df.iloc[idx, total_price_col_idx] = qty * float(product_info['价格'])
+                    if warning:
+                        # 填充行号
+                        excel_row = idx + 1  # DataFrame 0-based → Excel 1-based
+                        warning_with_row = warning.replace("第0行", f"第{excel_row}行")
+                        qty_warnings.append(warning_with_row)
+                        logger.warning(warning_with_row)
                 df.iloc[idx, std_code_col_idx] = matched_code
                 df.iloc[idx, orig_code_col_idx] = product_info.get('原规格编码', '')
                 df.iloc[idx, label_col_idx] = label
@@ -171,6 +213,7 @@ class QuotingService:
                 stats['no_match'] += 1
                 no_match_codes.append(str(code).strip())
 
+        stats['qty_warnings'] = qty_warnings
         return df, stats, no_match_codes
 
     def update_library(self, file_path: str, code_col: int, price_col: int, label_col: int) -> Tuple[List[Dict], List[Dict]]:

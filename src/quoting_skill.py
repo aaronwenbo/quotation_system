@@ -88,6 +88,13 @@ def quote_order(file_path: str, code_col: int, qty_col: int) -> None:
     elif no_match_codes:
         logger.info(f"  无匹配编码: {len(no_match_codes)} 个 (前20): {no_match_codes[:20]}")
 
+    # 输出数量列警告
+    qty_warnings = stats.get('qty_warnings', [])
+    if qty_warnings:
+        logger.warning(f"  数量列警告 ({len(qty_warnings)} 条):")
+        for w in qty_warnings:
+            logger.warning(f"    {w}")
+
     # 保存结果
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     basename = os.path.splitext(os.path.basename(file_path))[0]

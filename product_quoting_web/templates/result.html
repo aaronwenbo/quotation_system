@@ -25,6 +25,18 @@
         </div>
     </div>
 
+    {% if qty_warnings %}
+    <h2 style="margin-top: 2rem;">数量列警告 ({{ qty_warnings|length }}条)</h2>
+    <div class="alert alert-warning" style="background:#FFF3CD; border:1px solid #FFC107; padding:1rem; border-radius:8px;">
+        {% for warning in qty_warnings %}
+        <div style="margin-bottom: 4px;">⚠️ {{ warning }}</div>
+        {% endfor %}
+        <div style="margin-top: 8px; font-size: 0.9rem; color: #856404;">
+            以上行的数量无法识别，对应行的总价未计算。
+        </div>
+    </div>
+    {% endif %}
+
     <h2>匹配明细</h2>
     <table class="preview-table">
         <thead>
