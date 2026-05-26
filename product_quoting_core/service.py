@@ -142,6 +142,8 @@ class QuotingService:
             df = pd.read_csv(file_path, header=None)
         else:
             df = pd.read_excel(file_path, header=None)
+        # 避免 pandas StringDtype 导致 float 赋值报错（生产环境 infer_string 开启时）
+        df = df.astype(object)
 
         stats = {
             'total': 0,
@@ -243,6 +245,8 @@ class QuotingService:
             df = pd.read_csv(file_path, header=None)
         else:
             df = pd.read_excel(file_path, header=None)
+        # 避免 pandas StringDtype 导致后续处理报错（生产环境 infer_string 开启时）
+        df = df.astype(object)
 
         added = []
         skipped = []
