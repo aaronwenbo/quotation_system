@@ -125,7 +125,7 @@ class QuotingService:
             return None, f"第{0}行数量无法识别为数字: '{original}'"  # 行号由调用方填充
 
     def process_quote(self, file_path: str, code_col: int, qty_col: int,
-                      markup_percent: float = 0) -> Tuple[pd.DataFrame, Dict, List[str]]:
+                      markup_percent: float = 0, skip_rows: int = 1) -> Tuple[pd.DataFrame, Dict, List[str]]:
         """
         处理订单报价
 
@@ -134,6 +134,7 @@ class QuotingService:
             code_col: 产品编码列号 (A=0, B=1...)
             qty_col: 数量列号
             markup_percent: 价格上浮百分比，0表示不上浮
+            skip_rows: 跳过前N行（通常第1行为表头），默认1
 
         Returns:
             (结果DataFrame, 统计字典, 未匹配编码列表)
@@ -160,6 +161,8 @@ class QuotingService:
         qty_warnings = []  # 数量列无法解析的警告列表
 
         for idx, row in df.iterrows():
+            if idx < skip_rows:
+                continue
             code = row.iloc[code_col] if code_col < len(row) else None
             if pd.isna(code) or not str(code).strip():
                 continue
