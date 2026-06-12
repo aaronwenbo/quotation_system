@@ -93,10 +93,32 @@ def library_status():
     # 获取更新日志
     update_logs = quoting_service.get_update_log(limit=50)
 
+    # 检查是否有来自 /add-to-library 的确认请求待处理
+    confirm_code = request.args.get('confirm_code', '')
+    confirm_price = request.args.get('confirm_price', '')
+    confirm_spec = request.args.get('confirm_spec', '')
+    existing_info = None
+    if confirm_code:
+        # 直接查库确认编码是否存在（GET 请求不应有副作用）
+        if quoting_service.lib.has(confirm_code):
+            existing_info = {
+                'status': 'exists',
+                'existing': quoting_service.lib.get(confirm_code)
+            }
+        else:
+            # 编码已被删除，清除确认参数
+            confirm_code = ''
+            confirm_price = ''
+            confirm_spec = ''
+
     return render_template('library.html',
                           total_codes=total_codes,
                           backups=backups,
-                          update_logs=update_logs)
+                          update_logs=update_logs,
+                          confirm_code=confirm_code,
+                          confirm_price=confirm_price,
+                          confirm_spec=confirm_spec,
+                          existing_info=existing_info)
 
 
 @app.route('/backup-library', methods=['POST'])
@@ -291,6 +313,58 @@ def process_update():
     except Exception as e:
         flash(f'更新失败: {str(e)}', 'error')
         return redirect(url_for('update_library'))
+
+
+@app.route('/add-to-library', methods=['POST'])
+@requires_auth
+def add_to_library():
+    """手动添加产品到标准库"""
+    code = request.form.get('code', '').strip()
+    price = request.form.get('price', '').strip()
+    spec = request.form.get('spec', '').strip()
+    force = request.form.get('force', '0') == '1'
+
+    if not code:
+        flash('请输入产品编码', 'error')
+        return redirect(url_for('library_status'))
+
+    if not price:
+        flash('请输入价格', 'error')
+        return redirect(url_for('library_status'))
+
+    try:
+        price_val = float(price)
+    except (ValueError, TypeError):
+        flash('价格格式无效，请输入数字', 'error')
+        return redirect(url_for('library_status'))
+
+    try:
+        result = quoting_service.add_product(code, price_val, spec, force=force)
+
+        if result['status'] == 'added':
+            flash(result['message'], 'success')
+            return redirect(url_for('library_status'))
+
+        elif result['status'] == 'updated':
+            # force=1 时先备份再替换
+            quoting_service.backup_library(str(BACKUP_DIR))
+            flash(result['message'], 'success')
+            return redirect(url_for('library_status'))
+
+        elif result['status'] == 'exists':
+            # 编码已存在，重定向回 library 页面并带上待确认参数
+            return redirect(url_for('library_status',
+                                    confirm_code=code,
+                                    confirm_price=price,
+                                    confirm_spec=spec))
+
+        else:
+            flash(result.get('message', '操作失败'), 'error')
+            return redirect(url_for('library_status'))
+
+    except Exception as e:
+        flash(f'操作失败: {str(e)}', 'error')
+        return redirect(url_for('library_status'))
 
 
 if __name__ == '__main__':
