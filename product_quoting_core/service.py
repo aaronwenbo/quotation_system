@@ -302,6 +302,64 @@ class QuotingService:
         """检查重复编码"""
         return self.lib.check_duplicates()
 
+    def add_product(self, code: str, price: float, spec: str = '',
+                    force: bool = False) -> Dict:
+        """
+        手动添加产品到标准库
+
+        Args:
+            code: 产品编码
+            price: 价格
+            spec: 规格描述
+            force: 是否强制替换已存在的编码
+
+        Returns:
+            {
+                'status': 'added' | 'exists' | 'updated' | 'error',
+                'existing': {...}  仅 status='exists' 时返回现有产品信息
+                'message': str
+            }
+        """
+        code = code.strip()
+        if not code:
+            return {'status': 'error', 'message': '编码不能为空'}
+
+        try:
+            price = float(price)
+        except (ValueError, TypeError):
+            return {'status': 'error', 'message': '价格格式无效'}
+
+        if not self.lib.has(code):
+            if force:
+                return {'status': 'error', 'message': f'编码 {code} 不存在，无法替换'}
+            # 编码不存在，直接添加
+            self.lib.add(code, price, spec, code)
+            self.lib.save()
+            self._write_update_log([{'std': code, 'original': code, 'price': price}])
+            logger.info(f"手动添加产品: {code}, 价格: {price}")
+            return {'status': 'added', 'message': f'产品 {code} 已成功添加到标准库'}
+        else:
+            existing = self.lib.get(code)
+            if not force:
+                # 编码已存在，返回现有信息等待用户确认
+                return {
+                    'status': 'exists',
+                    'message': f'编码 {code} 已存在',
+                    'existing': existing
+                }
+            else:
+                # 强制替换（调用方应先在路由层 backup_library）
+                old_price = existing.get('价格', 'N/A')
+                self.lib.update(code, price, spec, code)
+                self.lib.save()
+                self._write_update_log([{'std': code, 'original': code, 'price': price}])
+                logger.info(f"手动替换产品: {code}, 新价格: {price}, 旧价格: {old_price}")
+                return {
+                    'status': 'updated',
+                    'message': f'产品 {code} 价格已替换',
+                    'existing': existing
+                }
+
     def save_styled_quote(self, df: pd.DataFrame, output_path: str, code_col: int, qty_col: int) -> None:
         """
         保存带样式的报价结果Excel
