@@ -65,6 +65,30 @@ class StandardLibrary:
             return True
         return False
 
+    def update(self, code: str, price: float, spec: str = '',
+               original_code: str = '') -> bool:
+        """
+        更新已有产品编码的价格和规格
+
+        Args:
+            code: 标准编码
+            price: 新价格
+            spec: 新规格
+            original_code: 原始编码
+
+        Returns:
+            True 表示更新成功，False 表示编码不存在
+        """
+        code = code.strip()
+        if code not in self.library:
+            return False
+        self.library[code]['价格'] = float(price)
+        if spec:
+            self.library[code]['规格'] = spec
+        if original_code:
+            self.library[code]['原规格编码'] = original_code
+        return True
+
     def save(self) -> None:
         data = []
         for code, info in self.library.items():
