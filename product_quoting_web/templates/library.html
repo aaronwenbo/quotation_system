@@ -13,6 +13,77 @@
         </div>
     </div>
 
+    <!-- ========== 手动添加产品表单 ========== -->
+    <h2 onclick="toggleAddForm()" style="cursor: pointer; user-select: none;">
+        <span id="add-form-toggle-icon">▶</span> 手动添加产品
+    </h2>
+    <div id="add-product-form" style="display: none;">
+        {% if existing_info and existing_info['status'] == 'exists' %}
+        <!-- 确认替换模式 -->
+        <div class="alert alert-warning">
+            <strong>⚠️ 编码 <code>{{ confirm_code }}</code> 已存在于标准库中</strong>
+        </div>
+        <div class="confirm-compare">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>现有值</th>
+                        <th>新值</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>价格</strong></td>
+                        <td>¥{{ "%.2f"|format(existing_info['existing']['价格']) }}</td>
+                        <td><strong>¥{{ "%.2f"|format(confirm_price|float) }}</strong></td>
+                    </tr>
+                    <tr>
+                        <td><strong>规格</strong></td>
+                        <td>{{ existing_info['existing']['规格'] or '(无)' }}</td>
+                        <td><strong>{{ confirm_spec or '(无)' }}</strong></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <form method="POST" action="{{ url_for('add_to_library') }}" style="margin-top: 1rem;">
+            <input type="hidden" name="code" value="{{ confirm_code }}">
+            <input type="hidden" name="price" value="{{ confirm_price }}">
+            <input type="hidden" name="spec" value="{{ confirm_spec }}">
+            <input type="hidden" name="force" value="1">
+            <button type="submit" class="btn btn-danger" onclick="return confirm('确认用新价格 ¥{{ "%.2f"|format(confirm_price|float) }} 替换编码 {{ confirm_code }} 的现有价格 ¥{{ "%.2f"|format(existing_info['existing']['价格']) }} 吗？')">✅ 确认替换</button>
+            <a href="{{ url_for('library_status') }}" class="btn btn-secondary">取消</a>
+        </form>
+        {% else %}
+        <!-- 普通添加模式 -->
+        <form method="POST" action="{{ url_for('add_to_library') }}" class="inline-form">
+            <input type="hidden" name="force" value="0">
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="code">产品编码 *</label>
+                    <input type="text" id="code" name="code" placeholder="如 20411-16-05" required>
+                </div>
+                <div class="form-group">
+                    <label for="price">价格 *</label>
+                    <input type="number" id="price" name="price" placeholder="如 28.30" step="0.01" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label for="spec">规格</label>
+                    <input type="text" id="spec" name="spec" placeholder="如 SS316">
+                </div>
+                <div class="form-group" style="align-self: flex-end;">
+                    <button type="submit" class="btn btn-success">添加到标准库</button>
+                </div>
+            </div>
+        </form>
+        {% endif %}
+    </div>
+
+    <!-- 如果确认替换模式，默认展开表单 -->
+    {% if existing_info and existing_info['status'] == 'exists' %}
+    <script>document.getElementById('add-product-form').style.display = 'block'; document.getElementById('add-form-toggle-icon').textContent = '▼';</script>
+    {% endif %}
+
     <h2>快速操作</h2>
     <div class="actions">
         <a href="{{ url_for('index') }}" class="btn btn-primary">开始报价</a>
@@ -91,4 +162,18 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+function toggleAddForm() {
+    var form = document.getElementById('add-product-form');
+    var icon = document.getElementById('add-form-toggle-icon');
+    if (form.style.display === 'none') {
+        form.style.display = 'block';
+        icon.textContent = '▼';
+    } else {
+        form.style.display = 'none';
+        icon.textContent = '▶';
+    }
+}
+</script>
 {% endblock %}
