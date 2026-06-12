@@ -131,12 +131,53 @@ h2 {
 }
 
 .form-group select,
-.form-group input[type="file"] {
+.form-group input[type="file"],
+.form-group input[type="text"],
+.form-group input[type="number"] {
     width: 100%;
     padding: 0.75rem;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     font-size: 1rem;
+}
+
+.form-row {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: flex-start;
+}
+
+.form-row .form-group {
+    flex: 1;
+    min-width: 150px;
+    margin-bottom: 1rem;
+}
+
+.inline-form {
+    background: #f7fafc;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.confirm-compare {
+    margin: 1rem 0;
+}
+
+.alert-warning {
+    background: #fffff0;
+    color: #744210;
+    border: 1px solid #faf089;
+}
+
+.btn-danger {
+    background: #e53e3e;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c53030;
 }
 
 .drop-zone {
