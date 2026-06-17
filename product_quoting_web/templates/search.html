@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}价格查询 - 产品报价系统{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>标准库价格查询</h1>
+
+    <!-- 搜索框 -->
+    <form method="GET" action="{{ url_for('search_price') }}" class="search-form">
+        <div class="search-row">
+            <input type="text" name="q" value="{{ query }}"
+                   placeholder="输入产品编码或关键词，如 20411 或 套筒"
+                   class="search-input" autofocus>
+            <button type="submit" class="btn btn-primary">🔍 查询</button>
+        </div>
+    </form>
+
+    <!-- 搜索结果 -->
+    {% if query %}
+        {% if results %}
+            {% if results|length == 1 %}
+            <!-- 精确匹配：单条详情展示 -->
+            <div class="alert alert-success" style="margin-top: 1.5rem;">
+                <strong>✅ 精确匹配</strong>
+            </div>
+            {% else %}
+            <!-- 模糊匹配：多条列表展示 -->
+            <div class="alert alert-info" style="margin-top: 1.5rem;">
+                找到 <strong>{{ results|length }}</strong> 条匹配结果
+            </div>
+            {% endif %}
+
+            <div class="table-container" style="margin-top: 1rem;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>序号</th>
+                            <th>标准编码</th>
+                            <th>价格</th>
+                            <th>规格</th>
+                            <th>原规格编码</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in results %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><code>{{ item['标准编码'] }}</code></td>
+                            <td><strong>¥{{ "%.2f"|format(item['价格']) }}</strong></td>
+                            <td>{{ item['规格'] or '-' }}</td>
+                            <td><code>{{ item['原规格编码'] }}</code></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <!-- 无匹配结果 -->
+            <div class="alert alert-warning" style="margin-top: 1.5rem;">
+                <strong>未找到相关产品</strong>，请尝试其他关键词
+            </div>
+        {% endif %}
+    {% else %}
+        <!-- 初始状态：未输入查询 -->
+        <div class="alert alert-info" style="margin-top: 1.5rem;">
+            请输入产品编码或关键词进行查询
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

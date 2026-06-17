@@ -302,6 +302,54 @@ class QuotingService:
         """检查重复编码"""
         return self.lib.check_duplicates()
 
+    def search_library(self, keyword: str) -> List[Dict]:
+        """
+        在标准库中搜索产品，支持编码和规格的模糊匹配
+
+        搜索策略：
+        1. 先精确匹配标准编码
+        2. 精确命中则只返回该条
+        3. 未精确命中则遍历所有编码，模糊匹配编码或规格（不区分大小写）
+
+        Args:
+            keyword: 搜索关键词
+
+        Returns:
+            匹配产品列表，每项包含: 标准编码, 价格, 规格, 原规格编码
+        """
+        keyword = keyword.strip()
+        if not keyword:
+            return []
+
+        keyword_lower = keyword.lower()
+
+        # 先尝试精确匹配
+        if self.lib.has(keyword):
+            info = self.lib.get(keyword)
+            return [{
+                '标准编码': keyword,
+                '价格': info['价格'],
+                '规格': info['规格'],
+                '原规格编码': info['原规格编码']
+            }]
+
+        # 模糊匹配：编码或规格包含关键词
+        results = []
+        for code, info in self.lib.library.items():
+            if keyword_lower in code.lower() or keyword_lower in info.get('规格', '').lower():
+                results.append({
+                    '标准编码': code,
+                    '价格': info['价格'],
+                    '规格': info['规格'],
+                    '原规格编码': info['原规格编码']
+                })
+
+        # 按编码排序
+        results.sort(key=lambda x: x['标准编码'])
+
+        logger.info(f"搜索 '{keyword}': 精确匹配={1 if self.lib.has(keyword) else 0}, 模糊匹配={len(results)}")
+        return results
+
     def add_product(self, code: str, price: float, spec: str = '',
                     force: bool = False) -> Dict:
         """
