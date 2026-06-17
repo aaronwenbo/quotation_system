@@ -315,6 +315,20 @@ def process_update():
         return redirect(url_for('update_library'))
 
 
+@app.route('/search')
+@requires_auth
+def search_price():
+    """标准库价格查询页面"""
+    q = request.args.get('q', '').strip()
+    results = []
+    if q:
+        try:
+            results = quoting_service.search_library(q)
+        except Exception as e:
+            flash(f'查询失败: {str(e)}', 'error')
+    return render_template('search.html', query=q, results=results)
+
+
 @app.route('/add-to-library', methods=['POST'])
 @requires_auth
 def add_to_library():
